@@ -1,0 +1,50 @@
+{
+  "repository": "auto-paint",
+  "date": "2026-10-03",
+  "sources": [
+    {
+      "repo": "auto-lang",
+      "commit": "17292c07e792e80d4e4da5495fc3fc2917e8aa1e",
+      "path": "examples/ui/031-paint",
+      "primary": true,
+      "fileCount": 4,
+      "pacFields": {
+        "name": "pixel-paint",
+        "version": "1.0.0",
+        "scene": "ui",
+        "render": "vue",
+        "icon": "pencil",
+        "title": "Paint",
+        "title_zh": "像素画板",
+        "category": "tool",
+        "theme": "dark",
+        "accent": "indigo",
+        "window": "fit",
+        "desktop": "true"
+      },
+      "files": [
+        {
+          "sourcePath": "examples/ui/031-paint/SPEC.md",
+          "path": "SPEC.md",
+          "sha256": "7d19c7764428c1ffd61e060e9ffda851c3b4ed61dbfca73c7943bb08c8838810"
+        },
+        {
+          "sourcePath": "examples/ui/031-paint/pac.at",
+          "path": "pac.at",
+          "sha256": "e2f118d6a953cf6e04ba191db1b664fb28ed5aace938f06c9a0c6895015b8081"
+        },
+        {
+          "sourcePath": "examples/ui/031-paint/src/front/app.at",
+          "path": "src/front/app.at",
+          "sha256": "5ff7495d2e6e6b2ffe0f3779635c5378775abc084f5837ef0a54ed5b9d953c97"
+        },
+        {
+          "sourcePath": "examples/ui/031-paint/tests/desktop_mcp.py",
+          "path": "tests/desktop_mcp.py",
+          "sha256": "600c310a8a7368a091ea555d2d655a0fb092d726d2289e53a80350c81caf41ab"
+        }
+      ]
+    }
+  ],
+  "note": "Exact committed source snapshots; packaging changes follow in a separate commit. References are not additional installed apps."
+}
