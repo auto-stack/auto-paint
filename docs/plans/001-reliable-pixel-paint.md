@@ -6,7 +6,7 @@ author: [Codex]
 created_at: 2026-10-29
 updated_at: 2026-10-29
 plan_revision: 2
-current_step: 0
+current_step: 1
 total_steps: 7
 supersedes_spec_components: []
 new_spec_components: [docs/specs/paint/basic-capabilities.md]
@@ -102,7 +102,8 @@ T-02..04按下列任务依赖顺序推进；T-05将本节拟议测试做成真�
 
 ## 8. 执行步骤
 
-- [ ] T-01（owner_stage=work；依赖 无；AC-01..04）：基线与全路径探针：复现全白/全黑/混合颜色的保存/重开与撤销；验证 Auto 列表/序列化替代表示、可靠存储结果和实际文件输出。SVG 是首版确定格式，不依赖未验证的 PNG 编码器。若需后端写文件，17835 为候选，先核端口/权限；框架缺陷须闭合或证明等价应用方案，不仅取消 SKIP。 输出新文件 `docs/plans/evidence/001/capability-decision.md`，记录可用API、版本/资源边界、缺项owner和最小闭环。
+- [x] T-01（owner_stage=work；依赖 无；AC-01..04）：基线与全路径探针：复现全白/全黑/混合颜色的保存/重开与撤销；验证 Auto 列表/序列化替代表示、可靠存储结果和实际文件输出。SVG 是首版确定格式，不依赖未验证的 PNG 编码器。若需后端写文件，17835 为候选，先核端口/权限；框架缺陷须闭合或证明等价应用方案，不仅取消 SKIP。 输出新文件 `docs/plans/evidence/001/capability-decision.md`，记录可用API、版本/资源边界、缺项owner和最小闭环。
+  [✅ 已完成 2026-10-29] 基线 HEAD=origin/main=56025f2、四文件冻结hash一致；VM轨 desktop_mcp **31 PASS/0 FAIL/0 SKIP**（P553-D1 全同盘 Redo/Load 在工具链 v0.0.20-117-g873fa23 未复现）；VM 进程内 back.api→fs.write 真实落盘（tmp/probe-app/probe-out.txt）；vue split（`-r vue --server vm`，front17834/back17835）POST /api/probe/export 写文件+回读一致；fs.write 失败静默→导出用回读比对闭环；旧 v1 storage 实为 256 段 ` bg-[#rrggbb] ` 类串（非hex）；vite 绑 localhost 不绑 127.0.0.1。详见 `docs/plans/evidence/001/capability-decision.md`。
 - [ ] T-02（owner_stage=work；依赖 T-01；AC-01..04）：可恢复像素模型：将 CSS 展示与颜色真值分离，补版本化工程格式、旧 v1 安全读取/迁移，拒绝非256项或非法色值。
 - [ ] T-03（owner_stage=work；依赖 T-02；AC-01..04）：可靠存取与图像输出：修复 Undo/Redo/Load 全同色退化；实现实际工程保存回读与 SVG 文件导出；失败不改已保存版本、不破坏旧文件。
 - [ ] T-04（owner_stage=work；依赖 T-03；AC-01..04）：用户操作闭环：沿用现有画笔/填充/吸色与20步撤销范围，增加明确保存/加载/导出状态和路径；失败保留当前作品，不追加新绘画功能。
