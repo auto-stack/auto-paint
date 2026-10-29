@@ -1,6 +1,6 @@
 ---
 plan_id: PAINT-001
-status: reviewed
+status: archived
 feature_name: reliable-pixel-paint
 author: [Codex]
 created_at: 2026-10-29
@@ -126,6 +126,9 @@ T-02..04按下列任务依赖顺序推进；T-05将本节拟议测试做成真�
   授权：/goal 完成计划001（经 /auto-plan-goal 全链授权：work/复审/有界修复/merge）。T-01 探针完成：双端导出接缝（back.api）实测可用、P553-D1 未复现（31/0/0）、fs.write 失败静默→回读比对闭环、旧v1为类串格式；capability-decision.md 落盘。
 - stage: work | plan_id: PAINT-001 | plan_revision: 2 | outcome: execution_ready（T-01..T-05 完成） | worktree: D:/autostack/auto-paint (独立clone, main) | base_commit: 56025f2 | code_commit: 见 T-01..05 各勾选条目 | dependency_revisions: auto-man binary v0.0.20-117-g873fa23（只读消费） | task_ids: T-01..T-05 | evidence: verify vm 27/27 + vue 22/22 + desktop_mcp 31/0/0（最终修订） | blockers: 无 | next_responsible_role: review（T-06 final，execution_done）
   T-02 hex真值模型+v2格式+v1迁移（78d4774）；T-03 SVG导出 back.api+回读比对（52313a4）；T-04 操作闭环探针10/10；T-05 verify_basic.py 双端 27/27+22/22、canonical Spec 增量已备、README 执行入口。用户裁决：导入导出 case 用稀疏设计图（10点）；DEBT-001（autoui MCP 批量动作）登记 auto-ui 78ee3b7；vue dev server ~90s 自终→驱动器重启容忍；vue 生成器 fn 形参与字段同名 ref 改写缺陷→应用侧改名规避（框架缺口 owner=auto-lang，未立项）。未闭项：无（work 范围）。统一回归：desktop_mcp 已随最终修订复跑通过；更全量门按仓库工作流归 review/merge。
+- stage: merge | plan_id: PAINT-001:r2 | outcome: pass | delivery_commit: d369ae4（spec 定稿；代码恒等 ed3bb91，docs-only descendant）→ 最终 tip 含归档回执 | worktree_path: D:/autostack/auto-paint（独立 clone=交付分支 main，无 .wt worktree） | branch: main
+  checkpoints — prepared: F-01 三处措辞修订（d369ae4，docs-only，实现/依赖零变化）；landed: 本仓无独立开发分支（计划 §2：独立 clone 的 main 即交付分支），main tip=交付提交，线性历史保持；ledger_refreshed: `.autoos/specs.json` 初建（Regime B 受控离线投影，无 store writer 可达；新建文件无覆盖面；schema 守卫通过——6 sections 精确 id、items 含 file/tags、读回校验；designs1/tests1/reviews1/reports1，version 1）；archived: 本文件 git mv → docs/plans/archived/，status: archived，README/总表反链已改指 archived 路径；cleaned: 无 worktree 可清理（guard N/A），无 plan-artifacts/plan-001 目录（无需 reclaim），独立开发 clone 按计划 §2 留在 main。
+  closeout — push: origin/main 推送（见下）; 父仓 gitlink: auto-os apps/auto-paint 56025f2 → 交付 tip（组合子模块未初始化，无本地 detach 面，gitlink 即状态）; 总表: b-apps-basic-capabilities.md Paint 行 → delivered/A。landing≠deployment 观察：本仓为 pac 源码仓，`auto run` 即消费形态，无独立 release 二进制/打包产物需重建。
 - stage: review | plan_id: PAINT-001 | plan_revision: 2 | round: 1 | reviewer_identity: independent subagent (general-purpose) in implementation session | outcome: pass（AC-05 通过；未发现合同违规或数据错误降级项） | worktree_path: D:/autostack/auto-paint | branch: main | reviewed_commit: ed3bb91ea456d87b3c155fd735408501c1c435a8 | base_commit: 56025f2 | dependency_revisions: auto-man v0.0.20-118-ge6cc06f（只读消费；与执行侧最终 T-05 附件记录一致，替代 T-01 期 117-g873fa23 记录） | spec_inputs: docs/specs/paint/basic-capabilities.md（SD-01/02）、README.md | acceptance_results: 复跑 verify vm 27/27 exit0、vue 22/22 exit0、desktop_mcp 31/0/0 exit0；独立反例 18/18（v2×260 拒绝、合法长度非词汇表 v2 拒绝、v1 混色逐格迁移、不存在目录导出失败可见、白格吸管+橡皮、空盘 Clear 不入撤销栈、Undo 后落笔清空 Redo） | pending_closeout_gates: T-07 merge（AC-06：提交推送、父仓 gitlink、canonical Spec 定稿——采纳 F-01 措辞修订、ledger/归档、B类总表刷新） | findings: F-01（P3，Spec 措辞精确性三处：状态可见拒绝限 Load 路径、crispEdges 在根 svg、"16 色板（含白色橡皮色）"；不影响行为，merge 定稿时修订） | evidence: docs/plans/attachments/001/verify-{vm,vue}-*.json、review 反例记录（本地件） | next: merge/T-07
   复审为独立 subagent 上下文（同检出冻结基线 ed3bb91、干净树，实现零改动）；局限与框架观察取自在案记录（dev-server 自终/DEBT-001/生成器形参改写），vue 本轮未触发重启路径。
 

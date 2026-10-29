@@ -41,7 +41,7 @@ AutoOS 通过 [`apps/031-paint`](https://github.com/auto-stack/auto-os/tree/v0.6
 
 ## 基本能力补齐计划（2026-10-29）
 
-[PAINT-001：可靠像素画板、保存恢复与作品导出](docs/plans/001-reliable-pixel-paint.md) 为本app的基础能力执行合同，实施与双端验收见计划 §8/§9 与 [T-01 能力决策](docs/plans/evidence/001/capability-decision.md)。
+[PAINT-001：可靠像素画板、保存恢复与作品导出](docs/plans/archived/001-reliable-pixel-paint.md) 为本app的基础能力执行合同（已交付归档），实施与双端验收见计划 §8/§9 与 [T-01 能力决策](docs/plans/evidence/001/capability-decision.md)。
 总状态与前置见 [AutoOS B类总跟踪表](https://github.com/auto-stack/auto-os/blob/main/docs/plans/b-apps-basic-capabilities.md)。基础能力通过后再考虑Linux；A类统一等待 auto-os-distro 完成 Nix＋COSMIC 基础，后续增强另会话。
 
 开发使用独立 clone `D:/autostack/auto-paint` 的 main；AutoOS 内对应子模块仅固定已交付提交，流程见 [App开发与子模块](https://github.com/auto-stack/auto-os/blob/main/docs/design/strategy/app-submodule-workflow.md)。
