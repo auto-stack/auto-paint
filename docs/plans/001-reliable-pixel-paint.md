@@ -6,7 +6,7 @@ author: [Codex]
 created_at: 2026-10-29
 updated_at: 2026-10-29
 plan_revision: 2
-current_step: 1
+current_step: 2
 total_steps: 7
 supersedes_spec_components: []
 new_spec_components: [docs/specs/paint/basic-capabilities.md]
@@ -104,7 +104,8 @@ T-02..04按下列任务依赖顺序推进；T-05将本节拟议测试做成真�
 
 - [x] T-01（owner_stage=work；依赖 无；AC-01..04）：基线与全路径探针：复现全白/全黑/混合颜色的保存/重开与撤销；验证 Auto 列表/序列化替代表示、可靠存储结果和实际文件输出。SVG 是首版确定格式，不依赖未验证的 PNG 编码器。若需后端写文件，17835 为候选，先核端口/权限；框架缺陷须闭合或证明等价应用方案，不仅取消 SKIP。 输出新文件 `docs/plans/evidence/001/capability-decision.md`，记录可用API、版本/资源边界、缺项owner和最小闭环。
   [✅ 已完成 2026-10-29] 基线 HEAD=origin/main=56025f2、四文件冻结hash一致；VM轨 desktop_mcp **31 PASS/0 FAIL/0 SKIP**（P553-D1 全同盘 Redo/Load 在工具链 v0.0.20-117-g873fa23 未复现）；VM 进程内 back.api→fs.write 真实落盘（tmp/probe-app/probe-out.txt）；vue split（`-r vue --server vm`，front17834/back17835）POST /api/probe/export 写文件+回读一致；fs.write 失败静默→导出用回读比对闭环；旧 v1 storage 实为 256 段 ` bg-[#rrggbb] ` 类串（非hex）；vite 绑 localhost 不绑 127.0.0.1。详见 `docs/plans/evidence/001/capability-decision.md`。
-- [ ] T-02（owner_stage=work；依赖 T-01；AC-01..04）：可恢复像素模型：将 CSS 展示与颜色真值分离，补版本化工程格式、旧 v1 安全读取/迁移，拒绝非256项或非法色值。
+- [x] T-02（owner_stage=work；依赖 T-01；AC-01..04）：可恢复像素模型：将 CSS 展示与颜色真值分离，补版本化工程格式、旧 v1 安全读取/迁移，拒绝非256项或非法色值。
+  [✅ 已完成 2026-10-29] `app.at` 改为 hex 真值（词表=16色板+白，闭合集合）+ `chip_of` 展示派生（字面类串留源码保 JIT）；`paint.project.v2`="PAINT-V2|16|16|<hex×256>"，Save 写后回读比对才置 saved；Load 优先 v2（版本/尺寸/逐项校验）、无 v2 只读迁移 v1（` bg-[#hex] `→hex，split 消费 `#` 的坑已修），非256项/非词表色整体拒绝不动画布。验证：desktop_mcp **31/0/0**；隔离存储探针 `tmp/t02_probe.py` **12/12**（v1全红迁移/255项拒绝/坏v2头拒绝/存→清→载全串逐项一致/泛洪后双 undo 经混合快照到全白 uniform 恢复、px 未塌缩）。vue 端 `auto run -r vue --server vm` 编译+服务正常（默认 `auto run` 走 rust 后端会失败——启动 profile 已定，T-05 记入 README）。
 - [ ] T-03（owner_stage=work；依赖 T-02；AC-01..04）：可靠存取与图像输出：修复 Undo/Redo/Load 全同色退化；实现实际工程保存回读与 SVG 文件导出；失败不改已保存版本、不破坏旧文件。
 - [ ] T-04（owner_stage=work；依赖 T-03；AC-01..04）：用户操作闭环：沿用现有画笔/填充/吸色与20步撤销范围，增加明确保存/加载/导出状态和路径；失败保留当前作品，不追加新绘画功能。
 - [ ] T-05（owner_stage=work；依赖 T-02..04；AC-01..04）：完成独立数据/失败回放和两端真实UI验收，新建 `tests/basic/verify_basic.py` 调度入口（可复用既有脚本），同时保存命令/输入hash/真实结果与原始失败；准备 canonical Spec 增量，提交实现，转 execution_done。
