@@ -18,23 +18,26 @@
 ## 2. 数据模型
 
 - **画布**：固定 16×16 = 256 格；像素真值 = 受验证 hex 色值（`#rrggbb`），
-  闭合词汇表 = 16 色板 + 白色（`#ffffff`，橡皮色）。Tailwind 类串只是展示
+  闭合词汇表 = 16 色板（含白色橡皮色 `#ffffff`）。Tailwind 类串只是展示
   派生（`chip_of` 词汇表映射），不是真值。
 - **工程存储**（storage `paint.project.v2`）：`"PAINT-V2|16|16|<hex×256>"`，
   共 259 段。写入后回读比对一致才置 saved（写入结果不用无条件 saved 标记）。
 - **旧格式**（storage `paint.canvas.v1`）：256 段 ` bg-[#rrggbb] ` 类串以
   `|` 连接。只读迁移：解析为 hex，非 256 项/非词汇表色整体拒绝。
-- **拒绝语义**：Load/Undo/Redo 快照应用逐项校验，任一项非法或长度非 256
+- **拒绝语义**：Load 的快照应用逐项校验，任一项非法或长度非 256
   → 整体拒绝，状态条可见（"bad save data"），当前画布不改动。
+  Undo/Redo 走同一校验（ApplySnap），拒绝时静默不动——实际不可达：
+  入栈快照只会来自已验证画布的 `join`。
 - **撤销**：hex 快照串栈，上限 20；栈空时撤销/重做显示
   "nothing to undo/redo"。
 
 ## 3. 导出（SVG）
 
 - 用户在输入框指定绝对路径，点击 Export。
-- 输出：独立 SVG 文本——16×16 viewBox、白色底 rect、每非白格一个
-  `shape-rendering="crispEdges"` rect（x=列,y=行,w=h=1,fill=hex）。
-  色值全部来自闭合词汇表，无用户自由文本，无转义面。
+- 输出：独立 SVG 文本——16×16 viewBox、根 `<svg>` 携带
+  `shape-rendering="crispEdges"`（被子元素继承）、白色底 rect、每非白格
+  一个 rect（x=列,y=行,w=h=1,fill=hex）。色值全部来自闭合词汇表，无用户
+  自由文本，无转义面。
 - **写后回读**：后端写文件并回读磁盘实际内容，前端与期望全串比对——
   一致置 "exported"；路径为空/写入失败回读不一致 → 状态条可见失败
   （"export: path required"/"export failed"），当前画布与已保存工程
