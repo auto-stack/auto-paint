@@ -636,12 +636,15 @@ fn hex_of_v1(s str) str {
 // 256 × hex → 独立 SVG 文本（固定 16×16 画布、白底、每非白格一个
 // crispEdges rect；色值全部来自闭合词汇表，无用户自由文本，无转义面）。
 // 行列：col = k%16（Fill 同款取模），row 用减法环（绕开整数除法）。
-fn build_svg(px List<str>) str {
+// 注意：形参不得与 model 字段同名（px、cells 均为字段）——vue 生成器把
+// 函数体内与字段同名的标识符改写成 ref 访问（X.value），裸数组形参即崩；
+// 用无关名 hexes 避开（T-05 实测，VM 端无此问题）。
+fn build_svg(hexes List<str>) str {
     var svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" shape-rendering=\"crispEdges\">"
     svg = svg + "<rect x=\"0\" y=\"0\" width=\"16\" height=\"16\" fill=\"#ffffff\"/>"
     var k int = 0
     while k < 256 {
-        if px[k] != "#ffffff" {
+        if hexes[k] != "#ffffff" {
             var col int = k % 16
             var row int = 0
             var t int = k
@@ -649,7 +652,7 @@ fn build_svg(px List<str>) str {
                 t = t - 16
                 row = row + 1
             }
-            svg = svg + "<rect x=\"" + col.to_string() + "\" y=\"" + row.to_string() + "\" width=\"1\" height=\"1\" fill=\"" + px[k] + "\"/>"
+            svg = svg + "<rect x=\"" + col.to_string() + "\" y=\"" + row.to_string() + "\" width=\"1\" height=\"1\" fill=\"" + hexes[k] + "\"/>"
         }
         k = k + 1
     }

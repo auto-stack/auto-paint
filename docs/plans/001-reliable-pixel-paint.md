@@ -1,12 +1,12 @@
 ---
 plan_id: PAINT-001
-status: drafting
+status: execution_done
 feature_name: reliable-pixel-paint
 author: [Codex]
 created_at: 2026-10-29
 updated_at: 2026-10-29
 plan_revision: 2
-current_step: 3
+current_step: 5
 total_steps: 7
 supersedes_spec_components: []
 new_spec_components: [docs/specs/paint/basic-capabilities.md]
@@ -108,8 +108,11 @@ T-02..04按下列任务依赖顺序推进；T-05将本节拟议测试做成真�
   [✅ 已完成 2026-10-29] `app.at` 改为 hex 真值（词表=16色板+白，闭合集合）+ `chip_of` 展示派生（字面类串留源码保 JIT）；`paint.project.v2`="PAINT-V2|16|16|<hex×256>"，Save 写后回读比对才置 saved；Load 优先 v2（版本/尺寸/逐项校验）、无 v2 只读迁移 v1（` bg-[#hex] `→hex，split 消费 `#` 的坑已修），非256项/非词表色整体拒绝不动画布。验证：desktop_mcp **31/0/0**；隔离存储探针 `tmp/t02_probe.py` **12/12**（v1全红迁移/255项拒绝/坏v2头拒绝/存→清→载全串逐项一致/泛洪后双 undo 经混合快照到全白 uniform 恢复、px 未塌缩）。vue 端 `auto run -r vue --server vm` 编译+服务正常（默认 `auto run` 走 rust 后端会失败——启动 profile 已定，T-05 记入 README）。
 - [x] T-03（owner_stage=work；依赖 T-02；AC-01..04）：可靠存取与图像输出：修复 Undo/Redo/Load 全同色退化；实现实际工程保存回读与 SVG 文件导出；失败不改已保存版本、不破坏旧文件。
   [✅ 已完成 2026-10-29] 全同色退化在 T-02 已实证不复现（uniform 双 undo/redo/载全过，desktop_mcp 31/0/0 复跑）；工程保存回读 T-02 已验（全串逐项比对）。SVG 导出落地：`src/back/api.at` `#[api] export_svg(path,content)`（fs.write+回读返回磁盘实文，fs.write 失败静默→前端全串比对闭环）；`pac.at` back_port 17835；`app.at` Export/SetPath + `build_svg`（16×16 白底+非白格 crispEdges rect，词表色无转义面，col=k%16/row 减法环）。验证：VM 轨 `tmp/t03_probe.py` **13/13**（空路径拒绝/单红格导出→XML 解析 16×16 2 rect (0,0) 红/无未转义内容/目录路径→"export failed" 可见且画布不变）；desktop_mcp 复跑 **31/0/0**；vue split（17834/17835）POST /api/paint/export 写文件+回读一致，生成 App.vue 含 Export/SetPath/export_svg 接线（浏览器级 UI 驱动归 T-05 双端验收）。
-- [ ] T-04（owner_stage=work；依赖 T-03；AC-01..04）：用户操作闭环：沿用现有画笔/填充/吸色与20步撤销范围，增加明确保存/加载/导出状态和路径；失败保留当前作品，不追加新绘画功能。
-- [ ] T-05（owner_stage=work；依赖 T-02..04；AC-01..04）：完成独立数据/失败回放和两端真实UI验收，新建 `tests/basic/verify_basic.py` 调度入口（可复用既有脚本），同时保存命令/输入hash/真实结果与原始失败；准备 canonical Spec 增量，提交实现，转 execution_done。
+- [x] T-04（owner_stage=work；依赖 T-03；AC-01..04）：用户操作闭环：沿用现有画笔/填充/吸色与20步撤销范围，增加明确保存/加载/导出状态和路径；失败保留当前作品，不追加新绘画功能。
+  [✅ 已完成 2026-10-29] 状态/路径 UI 与失败保留随 T-02/T-03 落地（Save 回读置 saved、Load/Export 失败状态可见、路径输入框+Export）。专项验证 `tmp/t04_probe.py` **10/10**：20 步撤销上限精确语义（24 次有效落笔→cap 丢底→20 undo 恰好回到第 4 笔后状态）、第 21 次 "nothing to undo" 显式状态、画布保持；saved 标志流转（画→0/Save→1/Load→1）；吸管循环。desktop_mcp 覆盖铅笔/橡皮/填充/吸管回归。
+- [x] T-05（owner_stage=work；依赖 T-02..04；AC-01..04）：完成独立数据/失败回放和两端真实UI验收，新建 `tests/basic/verify_basic.py` 调度入口（可复用既有脚本），同时保存命令/输入hash/真实结果与原始失败；准备 canonical Spec 增量，提交实现，转 execution_done。
+  [✅ 已完成 2026-10-29] `tests/basic/verify_basic.py` 双 profile 真实 UI 验收：vm（autoui MCP+隔离存储）**27/27**、vue（Playwright chromium，`-r vue --server vm`）**22/22**；desktop_mcp 复跑 **31/0/0**；记录 auto/git/python 版本、fixture hash、逐项结果与原始失败到 `docs/plans/attachments/001/verify-{profile}-*.json`（本地件）。V-01 全白/全黑/单点/稀疏设计图 save→重开→load 逐项一致；V-02 导出 XML/逐坐标/oracle 逐字节/chromium 真实渲染/不可写路径失败可见；V-03 坏 v2/v1 非法色拒绝且画布保持、v1 迁移、"nothing to undo"。canonical Spec 增量已备 `docs/specs/paint/basic-capabilities.md`（merge 时落地定稿）；README 补双端启动 profile 与验收入口。
+  【执行中用户裁决与框架发现】(a) 2026-10-29 用户裁决：导入/导出 case 用简单图——棋盘格(128格逐格画)换 10 点稀疏设计图（四角/防行列互换/中心对），全白全黑保留为全同盘回归反例；断言强度不变（长度256+全同值+逐位置值+导出坐标映射）。(b) 框架发现1：vue dev server 由监管进程在启动 ~90-100s 后自行终止（`pnpm exited Some(143)`，auto-man `auto run`）；应用侧等价方案=验收驱动器重启容忍（工程数据在浏览器 localStorage，重启+reload 透明），驱动器已实现。登记 auto-ui `docs/plans/debts.md` DEBT-001（autoui MCP 批量动作，2026-10-29 用户提议，含批内 id 失效/失败语义设计点）。(c) 框架发现2：vue 生成器把文件级函数体内与 model 字段同名的形参改写为 ref 访问（build_svg 形参 px→px.value、cells→cells.value 即崩），应用侧以无关名 hexes 规避并在 `app.at` 注记；框架缺口 owner=auto-lang（未立项）。(d) vite 只绑 ::1（localhost 可达，127.0.0.1 拒连），验收脚本用 localhost。
 - [ ] T-06（owner_stage=review；依赖 T-05；AC-05）：在同一app检出暂停实现，按冻结提交、真实数据和独立反例最终复审；核对Spec增量与双端结果，说明上下文独立性限制；未满足返回修复，不将数据错误降为债务。
 - [ ] T-07（owner_stage=merge；依赖 T-06；AC-06）：完成实际提交/推送/父仓gitlink验证，沉淀canonical Spec与derived ledger、归档；刷新总表A/B与证据，组合子模块显式detach，独立开发clone留在main。Linux仍等待发行版门，不因文档或脚本存在宣布已可用。
 
@@ -119,6 +122,10 @@ T-02..04按下列任务依赖顺序推进；T-05将本节拟议测试做成真�
 - stage: new | plan_id: PAINT-001 | plan_revision: 2 | outcome: pass（独立clone路径修订就绪；功能未实施/未验收） | next: work/T-01（另行执行）。
 - 本次只改工作位置、跨仓链接与AC-06/T-07的检出收尾说明，不变更基础能力要求；独立clone开发，组合子模块只固定已交付版本。
 - 本轮核对源码/Spec缺口、历史任务、路径、基线和计划唯一性；未执行实现/功能测试，所有7项任务保持未勾选；通过的是草案结构/相互引用检查，不是产品验收。
+- stage: goal | plan_id: PAINT-001 | plan_revision: 2 | round: 1 | from: drafting | to: work | status: executing | outcome: pass | worktree: D:/autostack/auto-paint (独立clone, main) | commit: 1aef4ca | next: work
+  授权：/goal 完成计划001（经 /auto-plan-goal 全链授权：work/复审/有界修复/merge）。T-01 探针完成：双端导出接缝（back.api）实测可用、P553-D1 未复现（31/0/0）、fs.write 失败静默→回读比对闭环、旧v1为类串格式；capability-decision.md 落盘。
+- stage: work | plan_id: PAINT-001 | plan_revision: 2 | outcome: execution_ready（T-01..T-05 完成） | worktree: D:/autostack/auto-paint (独立clone, main) | base_commit: 56025f2 | code_commit: 见 T-01..05 各勾选条目 | dependency_revisions: auto-man binary v0.0.20-117-g873fa23（只读消费） | task_ids: T-01..T-05 | evidence: verify vm 27/27 + vue 22/22 + desktop_mcp 31/0/0（最终修订） | blockers: 无 | next_responsible_role: review（T-06 final，execution_done）
+  T-02 hex真值模型+v2格式+v1迁移（78d4774）；T-03 SVG导出 back.api+回读比对（52313a4）；T-04 操作闭环探针10/10；T-05 verify_basic.py 双端 27/27+22/22、canonical Spec 增量已备、README 执行入口。用户裁决：导入导出 case 用稀疏设计图（10点）；DEBT-001（autoui MCP 批量动作）登记 auto-ui 78ee3b7；vue dev server ~90s 自终→驱动器重启容忍；vue 生成器 fn 形参与字段同名 ref 改写缺陷→应用侧改名规避（框架缺口 owner=auto-lang，未立项）。未闭项：无（work 范围）。统一回归：desktop_mcp 已随最终修订复跑通过；更全量门按仓库工作流归 review/merge。
 
 ## 10. 待澄清事项
 
