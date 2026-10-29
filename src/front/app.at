@@ -21,6 +21,7 @@
 // 31/0/0），V-01 以全白/全黑反例矩阵继续覆盖。
 
 use stylekit.styles: caption_text
+use back.api: export_svg
 
 style tool_btn = "px-3 py-1.5 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80"
 style wrap_row = "items-center gap-2 flex-wrap"
@@ -28,7 +29,7 @@ style wrap_row = "items-center gap-2 flex-wrap"
 widget App {
     msg {
         Init, SetTool(str), SetCur(str), Paint(int), Fill(int), SetPx(int, str),
-        PushUndo, Undo, Redo, ApplySnap(str), Clear, New, Save, Load
+        PushUndo, Undo, Redo, ApplySnap(str), Clear, New, Save, Load, SetPath(str), Export
     }
 
     model {
@@ -63,6 +64,9 @@ widget App {
         var undo_stack = []         // hex 快照串列表，上限 20
         var redo_stack = []
         var saved str = "1"         // "0" = 有未保存改动（标题行 ● 提示）
+
+        // ---- 导出 ----
+        var export_path str = ""    // 用户指定 SVG 输出路径
 
         // ---- 状态条 ----
         var status str = ""
@@ -135,6 +139,19 @@ widget App {
                 button "Load" { onclick: .Load, style: "px-3 py-1.5 text-sm rounded-lg bg-primary/15 text-primary" }
                 text .status { style: "ml-auto text-xs text-muted-foreground" }
             }
+
+            // ---- 导出行（用户指定路径 + Export）----
+            row {
+                style: wrap_row
+                text "SVG" { style: "text-xs text-muted-foreground" }
+                input {
+                    value: .export_path
+                    oninput: .SetPath
+                    placeholder: "D:/pictures/paint.svg"
+                    style: "px-2 py-1 text-sm rounded-lg border bg-background text-foreground w-72"
+                }
+                button "Export" { onclick: .Export, style: "px-3 py-1.5 text-sm rounded-lg bg-primary/15 text-primary" }
+            }
         }
     }
 
@@ -154,6 +171,7 @@ widget App {
             .tool = "pencil"
             .cur = "#111827"
             .cur_chip = " bg-[#111827] "
+            .export_path = ""
             .ToolClasses()
             .Swatches()
             .RebuildCells()
@@ -171,6 +189,10 @@ widget App {
             .cur_chip = chip_of(c)
             .Swatches()
             .status = ""
+        }
+
+        .SetPath(p) -> {
+            .export_path = p
         }
 
         .ToolClasses -> {
@@ -544,6 +566,23 @@ widget App {
                 }
             }
         }
+
+        // ---- SVG 导出（back.api：VM 档进程内，vue 档经 VM HTTP 服务）。
+        // fs.write 失败静默（T-01 ④）→ 后端回读返回磁盘实际内容，与期望
+        // SVG 全串比对：不一致/路径空 = 导出失败，状态可见，当前画布不动。----
+        .Export -> {
+            if .export_path == "" {
+                .status = "export: path required"
+            } else {
+                var svg = build_svg(.px)
+                var back = export_svg(.export_path, svg)
+                if back == svg {
+                    .status = "exported"
+                } else {
+                    .status = "export failed"
+                }
+            }
+        }
     }
 }
 
@@ -592,4 +631,28 @@ fn hex_of_v1(s str) str {
         return ""
     }
     return hex
+}
+
+// 256 × hex → 独立 SVG 文本（固定 16×16 画布、白底、每非白格一个
+// crispEdges rect；色值全部来自闭合词汇表，无用户自由文本，无转义面）。
+// 行列：col = k%16（Fill 同款取模），row 用减法环（绕开整数除法）。
+fn build_svg(px List<str>) str {
+    var svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" shape-rendering=\"crispEdges\">"
+    svg = svg + "<rect x=\"0\" y=\"0\" width=\"16\" height=\"16\" fill=\"#ffffff\"/>"
+    var k int = 0
+    while k < 256 {
+        if px[k] != "#ffffff" {
+            var col int = k % 16
+            var row int = 0
+            var t int = k
+            while t >= 16 {
+                t = t - 16
+                row = row + 1
+            }
+            svg = svg + "<rect x=\"" + col.to_string() + "\" y=\"" + row.to_string() + "\" width=\"1\" height=\"1\" fill=\"" + px[k] + "\"/>"
+        }
+        k = k + 1
+    }
+    svg = svg + "</svg>"
+    return svg
 }

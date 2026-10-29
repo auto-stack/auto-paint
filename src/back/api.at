@@ -1,0 +1,11 @@
+// back/api.at — PAINT-001 导出接缝（T-03）。
+//
+// SVG 导出经 #[api] 端点：VM UI 档进程内直调（T-01 实测），vue 档由
+// `auto run -r vue --server vm` 的 VM HTTP 服务承载（front 17834 / back 17835）。
+// fs.write 对失败静默返回 0（T-01 capability-decision ④），故这里写后
+// 回读：返回值 = 磁盘实际内容，前端与期望全串比对——不一致即导出失败。
+#[api(method = "POST", path = "/api/paint/export")]
+pub fn export_svg(path str, content str) str {
+    fs.write(path, content)
+    return fs.read_text(path)
+}

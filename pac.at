@@ -17,3 +17,6 @@ dep stylekit {
     path: "vendor/stylekit"
 }
 front_port: 17834
+# PAINT-001：SVG 导出后端（src/back/api.at 的 VM HTTP 服务）端口；
+# vue 档导出需 `auto run -r vue --server vm`（见 README）。
+back_port: 17835

@@ -6,7 +6,7 @@ author: [Codex]
 created_at: 2026-10-29
 updated_at: 2026-10-29
 plan_revision: 2
-current_step: 2
+current_step: 3
 total_steps: 7
 supersedes_spec_components: []
 new_spec_components: [docs/specs/paint/basic-capabilities.md]
@@ -106,7 +106,8 @@ T-02..04按下列任务依赖顺序推进；T-05将本节拟议测试做成真�
   [✅ 已完成 2026-10-29] 基线 HEAD=origin/main=56025f2、四文件冻结hash一致；VM轨 desktop_mcp **31 PASS/0 FAIL/0 SKIP**（P553-D1 全同盘 Redo/Load 在工具链 v0.0.20-117-g873fa23 未复现）；VM 进程内 back.api→fs.write 真实落盘（tmp/probe-app/probe-out.txt）；vue split（`-r vue --server vm`，front17834/back17835）POST /api/probe/export 写文件+回读一致；fs.write 失败静默→导出用回读比对闭环；旧 v1 storage 实为 256 段 ` bg-[#rrggbb] ` 类串（非hex）；vite 绑 localhost 不绑 127.0.0.1。详见 `docs/plans/evidence/001/capability-decision.md`。
 - [x] T-02（owner_stage=work；依赖 T-01；AC-01..04）：可恢复像素模型：将 CSS 展示与颜色真值分离，补版本化工程格式、旧 v1 安全读取/迁移，拒绝非256项或非法色值。
   [✅ 已完成 2026-10-29] `app.at` 改为 hex 真值（词表=16色板+白，闭合集合）+ `chip_of` 展示派生（字面类串留源码保 JIT）；`paint.project.v2`="PAINT-V2|16|16|<hex×256>"，Save 写后回读比对才置 saved；Load 优先 v2（版本/尺寸/逐项校验）、无 v2 只读迁移 v1（` bg-[#hex] `→hex，split 消费 `#` 的坑已修），非256项/非词表色整体拒绝不动画布。验证：desktop_mcp **31/0/0**；隔离存储探针 `tmp/t02_probe.py` **12/12**（v1全红迁移/255项拒绝/坏v2头拒绝/存→清→载全串逐项一致/泛洪后双 undo 经混合快照到全白 uniform 恢复、px 未塌缩）。vue 端 `auto run -r vue --server vm` 编译+服务正常（默认 `auto run` 走 rust 后端会失败——启动 profile 已定，T-05 记入 README）。
-- [ ] T-03（owner_stage=work；依赖 T-02；AC-01..04）：可靠存取与图像输出：修复 Undo/Redo/Load 全同色退化；实现实际工程保存回读与 SVG 文件导出；失败不改已保存版本、不破坏旧文件。
+- [x] T-03（owner_stage=work；依赖 T-02；AC-01..04）：可靠存取与图像输出：修复 Undo/Redo/Load 全同色退化；实现实际工程保存回读与 SVG 文件导出；失败不改已保存版本、不破坏旧文件。
+  [✅ 已完成 2026-10-29] 全同色退化在 T-02 已实证不复现（uniform 双 undo/redo/载全过，desktop_mcp 31/0/0 复跑）；工程保存回读 T-02 已验（全串逐项比对）。SVG 导出落地：`src/back/api.at` `#[api] export_svg(path,content)`（fs.write+回读返回磁盘实文，fs.write 失败静默→前端全串比对闭环）；`pac.at` back_port 17835；`app.at` Export/SetPath + `build_svg`（16×16 白底+非白格 crispEdges rect，词表色无转义面，col=k%16/row 减法环）。验证：VM 轨 `tmp/t03_probe.py` **13/13**（空路径拒绝/单红格导出→XML 解析 16×16 2 rect (0,0) 红/无未转义内容/目录路径→"export failed" 可见且画布不变）；desktop_mcp 复跑 **31/0/0**；vue split（17834/17835）POST /api/paint/export 写文件+回读一致，生成 App.vue 含 Export/SetPath/export_svg 接线（浏览器级 UI 驱动归 T-05 双端验收）。
 - [ ] T-04（owner_stage=work；依赖 T-03；AC-01..04）：用户操作闭环：沿用现有画笔/填充/吸色与20步撤销范围，增加明确保存/加载/导出状态和路径；失败保留当前作品，不追加新绘画功能。
 - [ ] T-05（owner_stage=work；依赖 T-02..04；AC-01..04）：完成独立数据/失败回放和两端真实UI验收，新建 `tests/basic/verify_basic.py` 调度入口（可复用既有脚本），同时保存命令/输入hash/真实结果与原始失败；准备 canonical Spec 增量，提交实现，转 execution_done。
 - [ ] T-06（owner_stage=review；依赖 T-05；AC-05）：在同一app检出暂停实现，按冻结提交、真实数据和独立反例最终复审；核对Spec增量与双端结果，说明上下文独立性限制；未满足返回修复，不将数据错误降为债务。
