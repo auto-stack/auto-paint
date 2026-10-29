@@ -15,3 +15,11 @@ __pycache__/
 /tmp/
 /test-results/
 /playwright-report/
+
+# Plan evidence (local-only working artifacts; deliberate *.md summaries may be committed)
+docs/plans/attachments/**
+!docs/plans/attachments/**/
+!docs/plans/attachments/**/*.md
+
+# auto CLI runtime state
+.auto/
