@@ -6,7 +6,7 @@ author: [Codex]
 created_at: 2026-10-29
 updated_at: 2026-10-29
 plan_revision: 2
-current_step: 5
+current_step: 7
 total_steps: 7
 supersedes_spec_components: []
 new_spec_components: [docs/specs/paint/basic-capabilities.md]
@@ -113,8 +113,10 @@ T-02..04按下列任务依赖顺序推进；T-05将本节拟议测试做成真�
 - [x] T-05（owner_stage=work；依赖 T-02..04；AC-01..04）：完成独立数据/失败回放和两端真实UI验收，新建 `tests/basic/verify_basic.py` 调度入口（可复用既有脚本），同时保存命令/输入hash/真实结果与原始失败；准备 canonical Spec 增量，提交实现，转 execution_done。
   [✅ 已完成 2026-10-29] `tests/basic/verify_basic.py` 双 profile 真实 UI 验收：vm（autoui MCP+隔离存储）**27/27**、vue（Playwright chromium，`-r vue --server vm`）**22/22**；desktop_mcp 复跑 **31/0/0**；记录 auto/git/python 版本、fixture hash、逐项结果与原始失败到 `docs/plans/attachments/001/verify-{profile}-*.json`（本地件）。V-01 全白/全黑/单点/稀疏设计图 save→重开→load 逐项一致；V-02 导出 XML/逐坐标/oracle 逐字节/chromium 真实渲染/不可写路径失败可见；V-03 坏 v2/v1 非法色拒绝且画布保持、v1 迁移、"nothing to undo"。canonical Spec 增量已备 `docs/specs/paint/basic-capabilities.md`（merge 时落地定稿）；README 补双端启动 profile 与验收入口。
   【执行中用户裁决与框架发现】(a) 2026-10-29 用户裁决：导入/导出 case 用简单图——棋盘格(128格逐格画)换 10 点稀疏设计图（四角/防行列互换/中心对），全白全黑保留为全同盘回归反例；断言强度不变（长度256+全同值+逐位置值+导出坐标映射）。(b) 框架发现1：vue dev server 由监管进程在启动 ~90-100s 后自行终止（`pnpm exited Some(143)`，auto-man `auto run`）；应用侧等价方案=验收驱动器重启容忍（工程数据在浏览器 localStorage，重启+reload 透明），驱动器已实现。登记 auto-ui `docs/plans/debts.md` DEBT-001（autoui MCP 批量动作，2026-10-29 用户提议，含批内 id 失效/失败语义设计点）。(c) 框架发现2：vue 生成器把文件级函数体内与 model 字段同名的形参改写为 ref 访问（build_svg 形参 px→px.value、cells→cells.value 即崩），应用侧以无关名 hexes 规避并在 `app.at` 注记；框架缺口 owner=auto-lang（未立项）。(d) vite 只绑 ::1（localhost 可达，127.0.0.1 拒连），验收脚本用 localhost。
-- [ ] T-06（owner_stage=review；依赖 T-05；AC-05）：在同一app检出暂停实现，按冻结提交、真实数据和独立反例最终复审；核对Spec增量与双端结果，说明上下文独立性限制；未满足返回修复，不将数据错误降为债务。
-- [ ] T-07（owner_stage=merge；依赖 T-06；AC-06）：完成实际提交/推送/父仓gitlink验证，沉淀canonical Spec与derived ledger、归档；刷新总表A/B与证据，组合子模块显式detach，独立开发clone留在main。Linux仍等待发行版门，不因文档或脚本存在宣布已可用。
+- [x] T-06（owner_stage=review；依赖 T-05；AC-05）：在同一app检出暂停实现，按冻结提交、真实数据和独立反例最终复审；核对Spec增量与双端结果，说明上下文独立性限制；未满足返回修复，不将数据错误降为债务。
+  [✅ 已完成 2026-10-29] 独立 subagent 复审 pass @ed3bb91：复跑 vm 27/27、vue 22/22、desktop_mcp 31/0/0；独立反例 18/18；Spec 增量一致；F-01（P3 措辞）已由 d369ae4 修订。见 §9 review 回执。
+- [x] T-07（owner_stage=merge；依赖 T-06；AC-06）：完成实际提交/推送/父仓gitlink验证，沉淀canonical Spec与derived ledger、归档；刷新总表A/B与证据，组合子模块显式detach，独立开发clone留在main。Linux仍等待发行版门，不因文档或脚本存在宣布已可用。
+  [✅ 已完成 2026-10-29] 交付 d369ae4（代码恒等 ed3bb91）→ 归档 tip ddcea23 已推 origin/main（线性无合并提交）；canonical Spec + .autoos/specs.json（designs/tests/reviews/reports 各1，file/tags 齐）入库；auto-os apps/auto-paint gitlink 56025f2→ddcea23、总表 Paint 行 delivered/A（4b53ee3 已推）；组合子模块未初始化（无本地 detach 面）；独立 clone 留 main。Linux 等待发行版前置不变。见 §9 merge 回执。
 
 ## 9. 复审记录
 
