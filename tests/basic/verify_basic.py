@@ -337,6 +337,55 @@ class VmSession:
                         return True
         return False
 
+    def wait_status(self, expected, timeout=5.0):
+        """Poll until the status bar shows a terminal value (review R-1:
+        handlers set status as their LAST statement, so a terminal status
+        implies the preceding px/file work and re-render completed)."""
+        if isinstance(expected, str):
+            expected = (expected,)
+        deadline = time.time() + timeout
+        last = ""
+        while time.time() < deadline:
+            last = self.status()
+            if last in expected:
+                return last
+            time.sleep(0.4)
+        return last
+
+    def _press_to_status(self, button, expected, timeout):
+        self.click(button)
+        st = self.wait_status(expected, timeout)
+        if st not in expected:
+            # press lost across a render window: re-press from a fresh settle
+            self.click(button)
+            st = self.wait_status(expected, timeout)
+        return st
+
+    def load_terminal(self, expected):
+        return self._press_to_status("Load", expected if isinstance(expected, tuple)
+                                     else (expected,), 5.0)
+
+    def save_terminal(self):
+        return self._press_to_status("Save", ("saved", "save failed"), 5.0)
+
+    def export_terminal(self):
+        return self._press_to_status("Export", ("exported", "export failed"), 6.0)
+
+    def export_verify(self, verify, timeout=8.0, tries=2):
+        """Effect-based export wait (review R-1 round 2): the status bar may
+        ALREADY show the expected terminal from a previous export, so status
+        membership is unsound. Poll `verify()` (file content / failure
+        status) after each Export press; re-press once if the press was lost
+        across a render window. Returns the final status text."""
+        for i in range(tries):
+            self.click("Export")
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                if verify():
+                    return self.status()
+                time.sleep(0.4)
+        return self.status()
+
     def paint(self, index, swatch_pos, expect=None):
         """Paint one cell via real UI presses and VERIFY the effect landed on
         the intended cell (review R-01: a press racing a re-render could
@@ -440,13 +489,11 @@ def run_vm_profile(report, evidence_dir):
         check("flood -> uniform 256 dark",
               len(px) == 256 and all(c == DARK for c in px),
               f"dark={px.count(DARK) if px else 0}")
-        s.click("Save")
-        time.sleep(0.5)
+        s.save_terminal()
         saved_px = px
         s.click("New")
         time.sleep(0.5)
-        s.click("Load")
-        time.sleep(0.8)
+        s.load_terminal("loaded")
         px = s.px()
         check("uniform dark: save -> new -> load identical vector",
               px == saved_px and len(px) == 256, f"dark={px.count(DARK) if px else 0}")
@@ -475,12 +522,10 @@ def run_vm_profile(report, evidence_dir):
         px = s.px()
         check("sparse pattern painted per-cell exact",
               px == want, f"red={px.count(RED) if px else 0}")
-        s.click("Save")
-        time.sleep(0.5)
+        s.save_terminal()
         s.click("New")
         time.sleep(0.5)
-        s.click("Load")
-        time.sleep(0.8)
+        s.load_terminal("loaded")
         px = s.px()
         check("sparse pattern save -> new -> load identical vector", px == want,
               f"red={px.count(RED) if px else 0}")
@@ -488,16 +533,15 @@ def run_vm_profile(report, evidence_dir):
         # ── V-02: SVG export fidelity + real render ──
         print("\nV-02 [vm]: SVG export")
         check2 = lambda name, cond, detail="": report.check("V-02", name, cond, detail)
-        s.click("Export")
-        time.sleep(1)
+        s.export_verify(lambda: s.status() == "export: path required")
         check2("empty path -> 'export: path required'",
                s.status() == "export: path required", s.status())
         ok = s.set_path(out_svg)
         check2("path input set via UI", ok, "input value mismatch")
-        s.click("Export")
-        time.sleep(2)
-        check2("status exported", s.status() == "exported", s.status())
         oracle = expected_svg(want)
+        s.export_verify(lambda: os.path.exists(out_svg)
+                        and open(out_svg, encoding="utf-8").read() == oracle)
+        check2("status exported", s.status() == "exported", s.status())
         if os.path.exists(out_svg):
             content = open(out_svg, encoding="utf-8").read()
             try:
@@ -527,8 +571,7 @@ def run_vm_profile(report, evidence_dir):
         # unwritable path: directory as file -> visible failure, canvas intact
         px_before = s.px()
         s.set_path(tempfile.gettempdir().replace("\\", "/"))
-        s.click("Export")
-        time.sleep(2)
+        s.export_verify(lambda: s.status() == "export failed")
         check2("unwritable path -> 'export failed' visible",
                s.status() == "export failed", s.status())
         check2("canvas preserved after failed export", s.px() == px_before, "px changed")
@@ -542,8 +585,7 @@ def run_vm_profile(report, evidence_dir):
         s.paint(55, 0, expect=DARK)
         time.sleep(0.3)
         checkp2("next edit after V-02 flow painted", s.px() == want_a, "px mismatch")
-        s.click("Save")
-        time.sleep(0.6)
+        s.save_terminal()
         checkp2("save status", s.status() == "saved", s.status())
         pid1 = s.proc.pid
         s.close()
@@ -554,8 +596,7 @@ def run_vm_profile(report, evidence_dir):
         px = s.px()
         checkp2("fresh boot starts white (no auto-load)",
                 len(px) == 256 and all(c == WHITE for c in px), f"len={len(px)}")
-        s.click("Load")
-        time.sleep(0.8)
+        s.load_terminal("loaded")
         checkp2("reopen same storage -> Load 256-cell identical", s.px() == want_a,
                 f"red={s.px().count(RED)}")
         s.paint(100, 0, expect=DARK)
@@ -563,14 +604,12 @@ def run_vm_profile(report, evidence_dir):
         want_b = list(want_a)
         want_b[100] = DARK
         checkp2("edit after reopen works", s.px() == want_b, "px mismatch")
-        s.click("Save")
-        time.sleep(0.6)
+        s.save_terminal()
         s.close()
         s = VmSession(storage, report)
         if not s.ready:
             return 1
-        s.click("Load")
-        time.sleep(0.8)
+        s.load_terminal("loaded")
         checkp2("second reopen -> Load still identical", s.px() == want_b,
                 f"red={s.px().count(RED)} dark={s.px().count(DARK)}")
         # review R-03 counterexample: an unsaved in-memory edit must NOT
@@ -586,8 +625,7 @@ def run_vm_profile(report, evidence_dir):
         s = VmSession(storage, report)
         if not s.ready:
             return 1
-        s.click("Load")
-        time.sleep(0.8)
+        s.load_terminal("loaded")
         checkp2("unsaved edit does not survive reopen", s.px() == want_b,
                 f"dark={s.px().count(DARK)}")
 
@@ -599,8 +637,8 @@ def run_vm_profile(report, evidence_dir):
         cn_path = os.path.join(cn_dir, "画作 测试.svg").replace("\\", "/")
         oracle_b = expected_svg(want_b)
         checkp3("Chinese/space path set via UI", s.set_path(cn_path), "input mismatch")
-        s.click("Export")
-        time.sleep(2)
+        s.export_verify(lambda: os.path.exists(cn_path)
+                        and open(cn_path, encoding="utf-8").read() == oracle_b)
         checkp3("Chinese/space path exported", s.status() == "exported", s.status())
         content_b = open(cn_path, encoding="utf-8").read() if os.path.exists(cn_path) else ""
         checkp3("Chinese/space path file byte-equals oracle", content_b == oracle_b,
@@ -611,8 +649,8 @@ def run_vm_profile(report, evidence_dir):
         want_c = list(want_b)
         want_c[150] = DARK
         oracle_c = expected_svg(want_c)
-        s.click("Export")
-        time.sleep(2)
+        s.export_verify(lambda: os.path.exists(cn_path)
+                        and open(cn_path, encoding="utf-8").read() == oracle_c)
         content_c = open(cn_path, encoding="utf-8").read() if os.path.exists(cn_path) else ""
         checkp3("existing target overwritten with new content",
                 content_c == oracle_c and content_c != content_b,
@@ -623,8 +661,7 @@ def run_vm_profile(report, evidence_dir):
                                 f"paint-verify-no-such-dir-{int(time.time())}",
                                 "x.svg").replace("\\", "/")
         s.set_path(bad_path)
-        s.click("Export")
-        time.sleep(2)
+        s.export_verify(lambda: s.status() == "export failed")
         checkp3("bad dir -> 'export failed' visible", s.status() == "export failed",
                 s.status())
         checkp3("failed export created no file", not os.path.exists(bad_path), bad_path)
@@ -633,8 +670,8 @@ def run_vm_profile(report, evidence_dir):
         rec_path = os.path.join(tempfile.gettempdir(),
                                 f"paint-verify-vm-recovery-{int(time.time())}.svg").replace("\\", "/")
         s.set_path(rec_path)
-        s.click("Export")
-        time.sleep(2)
+        s.export_verify(lambda: os.path.exists(rec_path)
+                        and open(rec_path, encoding="utf-8").read() == oracle_c)
         checkp3("recovery export succeeds", s.status() == "exported", s.status())
         checkp3("recovery file byte-equals oracle",
                 os.path.exists(rec_path) and
@@ -652,8 +689,7 @@ def run_vm_profile(report, evidence_dir):
         s = VmSession(storage, report)
         if not s.ready:
             return 1
-        s.click("Load")
-        time.sleep(0.8)
+        s.load_terminal("bad save data")
         check3("bad v2 (255 items) rejected", s.status() == "bad save data", s.status())
         check3("canvas unchanged after bad v2 load",
                len(s.px()) == 256 and all(c == WHITE for c in s.px()), "px changed")
@@ -665,8 +701,7 @@ def run_vm_profile(report, evidence_dir):
         s = VmSession(storage, report)
         if not s.ready:
             return 1
-        s.click("Load")
-        time.sleep(0.8)
+        s.load_terminal("loaded v1")
         check3("v1 all-red migrates", s.status() == "loaded v1", s.status())
         px = s.px()
         check3("v1 migration vector exact (256 red)",
@@ -680,8 +715,7 @@ def run_vm_profile(report, evidence_dir):
         s = VmSession(storage, report)
         if not s.ready:
             return 1
-        s.click("Load")
-        time.sleep(0.8)
+        s.load_terminal("bad save data")
         check3("v1 illegal color rejected", s.status() == "bad save data", s.status())
         check3("canvas unchanged after illegal v1",
                len(s.px()) == 256 and all(c == WHITE for c in s.px()), "px changed")
@@ -767,6 +801,44 @@ class VueSession:
         inp.fill(path)
         self.page.wait_for_timeout(150)
         return inp.input_value() == path
+
+    def wait_status(self, expected, timeout=6.0):
+        """Poll DOM status until a terminal value (review R-1 Mode A/B)."""
+        if isinstance(expected, str):
+            expected = (expected,)
+        deadline = time.time() + timeout
+        last = ""
+        while time.time() < deadline:
+            last = self.status()
+            if last in expected:
+                return last
+            self.page.wait_for_timeout(300)
+        return last
+
+    def export_verify(self, verify, timeout=8.0, tries=2):
+        """Effect-based export wait: poll `verify()` (file content / failure
+        status) after each Export click; re-click once if the click was
+        lost. Status membership alone is unsound when the bar already shows
+        the expected terminal from a previous export."""
+        for i in range(tries):
+            self.button("Export").click()
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                if verify():
+                    return self.status()
+                self.page.wait_for_timeout(400)
+        return self.status()
+
+    def press_to(self, label, expected, tries=2):
+        """Click a button, wait for a terminal status; re-press once from a
+        fresh state if the click was lost."""
+        st = ""
+        for i in range(tries):
+            self.button(label).click()
+            st = self.wait_status(expected, 5.0)
+            if st in (expected if isinstance(expected, tuple) else (expected,)):
+                return st
+        return st
 
 
 class VueBrowser:
@@ -951,8 +1023,7 @@ def run_vue_profile(report, evidence_dir):
             s.page.goto(FRONT, wait_until="networkidle", timeout=60000)
             s.page.wait_for_selector(".w-5.h-5", timeout=30000)
             if restore_load:
-                s.button("Load").click()
-                s.page.wait_for_timeout(500)
+                s.press_to("Load", "loaded")
             return True
 
         print("\nV-01 [vue]: pixel vector fidelity (256 items, per-cell)")
@@ -986,15 +1057,13 @@ def run_vue_profile(report, evidence_dir):
         px = s.px()
         check("sparse pattern painted per-cell exact", px == want,
               f"red={px.count(RED)}")
-        s.button("Save").click()
-        s.page.wait_for_timeout(300)
+        s.press_to("Save", "saved")
         check("status saved", s.status() == "saved", s.status())
         s.button("New").click()
         s.page.wait_for_timeout(300)
         s.page.reload(wait_until="networkidle")   # 真“重开”：整页重载
         s.page.wait_for_selector(".w-5.h-5", timeout=30000)
-        s.button("Load").click()
-        s.page.wait_for_timeout(500)
+        s.press_to("Load", "loaded")
         px = s.px()
         check("save -> reload -> load identical vector", px == want,
               f"red={px.count(RED)}")
@@ -1005,15 +1074,14 @@ def run_vue_profile(report, evidence_dir):
             return 1
         if os.path.exists(out_svg):
             os.remove(out_svg)
-        s.button("Export").click()
-        s.page.wait_for_timeout(300)
+        s.export_verify(lambda: s.status() == "export: path required")
         check2("empty path -> 'export: path required'",
                s.status() == "export: path required", s.status())
         check2("path input set via UI", s.set_path(out_svg), "input value mismatch")
-        s.button("Export").click()
-        s.page.wait_for_timeout(1500)
-        check2("status exported", s.status() == "exported", s.status())
         oracle = expected_svg(want)
+        s.export_verify(lambda: os.path.exists(out_svg)
+                        and open(out_svg, encoding="utf-8").read() == oracle)
+        check2("status exported", s.status() == "exported", s.status())
         if os.path.exists(out_svg):
             content = open(out_svg, encoding="utf-8").read()
             try:
@@ -1047,8 +1115,7 @@ def run_vue_profile(report, evidence_dir):
         # unwritable path
         px_before = s.px()
         s.set_path(tempfile.gettempdir().replace("\\", "/"))
-        s.button("Export").click()
-        s.page.wait_for_timeout(1500)
+        s.export_verify(lambda: s.status() == "export failed")
         check2("unwritable path -> 'export failed' visible",
                s.status() == "export failed", s.status())
         check2("canvas preserved after failed export", s.px() == px_before,
@@ -1066,8 +1133,7 @@ def run_vue_profile(report, evidence_dir):
         px = s.px()
         checkp2("fresh browser starts white (no auto-load)",
                 len(px) == 256 and all(c == WHITE for c in px), f"len={len(px)}")
-        s.button("Load").click()
-        s.page.wait_for_timeout(600)
+        s.press_to("Load", "loaded")
         checkp2("persistent profile -> Load 256-cell identical", s.px() == want,
                 f"red={s.px().count(RED)}")
         s.click_swatch(0)
@@ -1075,8 +1141,7 @@ def run_vue_profile(report, evidence_dir):
         want_a = list(want)
         want_a[55] = DARK
         checkp2("next edit after reopen works", s.px() == want_a, "px mismatch")
-        s.button("Save").click()
-        s.page.wait_for_timeout(400)
+        s.press_to("Save", "saved")
         checkp2("save after reopen", s.status() == "saved", s.status())
 
         # ── P-03 [vue]: Chinese/space path, overwrite, backend-down failure
@@ -1090,8 +1155,8 @@ def run_vue_profile(report, evidence_dir):
         cn_path = os.path.join(cn_dir, "画作 测试.svg").replace("\\", "/")
         oracle_a = expected_svg(want_a)
         checkp3("Chinese/space path set via UI", s.set_path(cn_path), "input mismatch")
-        s.button("Export").click()
-        s.page.wait_for_timeout(2000)
+        s.export_verify(lambda: os.path.exists(cn_path)
+                        and open(cn_path, encoding="utf-8").read() == oracle_a)
         checkp3("Chinese/space path exported", s.status() == "exported", s.status())
         content_a = open(cn_path, encoding="utf-8").read() if os.path.exists(cn_path) else ""
         checkp3("Chinese/space path file byte-equals oracle", content_a == oracle_a,
@@ -1102,8 +1167,8 @@ def run_vue_profile(report, evidence_dir):
         want_b = list(want_a)
         want_b[100] = DARK
         oracle_b = expected_svg(want_b)
-        s.button("Export").click()
-        s.page.wait_for_timeout(2000)
+        s.export_verify(lambda: os.path.exists(cn_path)
+                        and open(cn_path, encoding="utf-8").read() == oracle_b)
         content_b = open(cn_path, encoding="utf-8").read() if os.path.exists(cn_path) else ""
         checkp3("existing target overwritten with new content",
                 content_b == oracle_b and content_b != content_a, f"len={len(content_b)}")
@@ -1115,8 +1180,7 @@ def run_vue_profile(report, evidence_dir):
         fail_path = os.path.join(tempfile.gettempdir(),
                                  f"paint-verify-vue-fail-{int(time.time())}.svg").replace("\\", "/")
         s.set_path(fail_path)
-        s.button("Export").click()
-        s.page.wait_for_timeout(3000)
+        s.export_verify(lambda: s.status() == "export failed")
         checkp3("backend down -> 'export failed' visible (no false success)",
                 s.status() == "export failed", s.status())
         checkp3("backend down -> no file written", not os.path.exists(fail_path),
@@ -1132,21 +1196,19 @@ def run_vue_profile(report, evidence_dir):
             return 1
         s.page.goto(FRONT, wait_until="networkidle", timeout=60000)
         s.page.wait_for_selector(".w-5.h-5", timeout=30000)
-        s.button("Load").click()
-        s.page.wait_for_timeout(600)
+        s.press_to("Load", "loaded")
         if s.px() != want_a:
             # first post-restart load raced server/page warmup: reload once
             s.page.reload(wait_until="networkidle")
             s.page.wait_for_selector(".w-5.h-5", timeout=30000)
-            s.button("Load").click()
-            s.page.wait_for_timeout(600)
+            s.press_to("Load", "loaded")
         checkp3("recovery: Load identical after app restart", s.px() == want_a,
                 f"red={s.px().count(RED)} dark={s.px().count(DARK)}")
         rec_path = os.path.join(tempfile.gettempdir(),
                                 f"paint-verify-vue-recovery-{int(time.time())}.svg").replace("\\", "/")
         s.set_path(rec_path)
-        s.button("Export").click()
-        s.page.wait_for_timeout(2500)
+        s.export_verify(lambda: os.path.exists(rec_path)
+                        and open(rec_path, encoding="utf-8").read() == oracle_a)
         checkp3("recovery export succeeds", s.status() == "exported", s.status())
         checkp3("recovery file byte-equals oracle",
                 os.path.exists(rec_path) and
@@ -1163,8 +1225,7 @@ def run_vue_profile(report, evidence_dir):
         report.fixtures["bad_v2_255"] = sha256(bad_v2)
         s.page.evaluate("v => localStorage.setItem('paint.project.v2', v)", bad_v2)
         px_before = s.px()
-        s.button("Load").click()
-        s.page.wait_for_timeout(400)
+        s.press_to("Load", ("loaded", "loaded v1", "bad save data"))
         check3("bad v2 (255 items) rejected", s.status() == "bad save data",
                s.status())
         check3("canvas unchanged after bad v2 load", s.px() == px_before,
@@ -1174,8 +1235,7 @@ def run_vue_profile(report, evidence_dir):
         report.fixtures["v1_all_red"] = sha256(v1_all_red)
         s.page.evaluate("v => localStorage.setItem('paint.canvas.v1', v)", v1_all_red)
         s.page.evaluate("localStorage.removeItem('paint.project.v2')")
-        s.button("Load").click()
-        s.page.wait_for_timeout(400)
+        s.press_to("Load", ("loaded", "loaded v1", "bad save data"))
         check3("v1 all-red migrates", s.status() == "loaded v1", s.status())
         px = s.px()
         check3("v1 migration vector exact (256 red)",
@@ -1186,8 +1246,7 @@ def run_vue_profile(report, evidence_dir):
         report.fixtures["v1_illegal"] = sha256(v1_bad)
         s.page.evaluate("v => localStorage.setItem('paint.canvas.v1', v)", v1_bad)
         px_before = s.px()
-        s.button("Load").click()
-        s.page.wait_for_timeout(400)
+        s.press_to("Load", ("loaded", "loaded v1", "bad save data"))
         check3("v1 illegal color rejected", s.status() == "bad save data",
                s.status())
         check3("canvas unchanged after illegal v1", s.px() == px_before,
