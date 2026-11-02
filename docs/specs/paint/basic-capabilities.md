@@ -1,6 +1,7 @@
-# paint 基本能力规范（PAINT-001）
+# paint 基本能力规范（PAINT-001，经 PAINT-002 修订）
 
-> 状态：随 PAINT-001 r2 提出，经最终复审后为本 app 的 canonical 模块规范。
+> 状态：随 PAINT-001 r2 提出，经最终复审后为本 app 的 canonical 模块规范；
+> PAINT-002 按独立运行实证修订导出失败/覆盖与跨进程重开边界（SD-01）。
 > 历史 `SPEC.md`（根目录）是 v1 导入时的观察/再生描述，保留作来源，不再
 > 作为当前能力的权威；本文与其冲突时以本文为准。
 
@@ -43,6 +44,14 @@
   （"export: path required"/"export failed"），当前画布与已保存工程
   不受影响。（框架缺口：`fs.write` 失败静默返回 0，故回读比对是本合同
   的成败判定，登记于 auto-paint capability-decision。）
+- **vue 档后端断开**（PAINT-002）：导出 api fetch reject → 处理器
+  try/catch 兜底置 "export failed"——不得显示上一次的 stale "exported"
+  （假成功，002 T-02 实证修复）；失败时不产生文件，当前画布与已保存
+  工程不变；后端恢复后下一次导出成功。
+- **既有目标覆盖**（PAINT-002）：对已存在文件再次导出 = 后端整体覆盖为
+  新内容（回读为新串），无保留旧版语义。
+- **路径词汇**（PAINT-002）：含中文与空格的绝对路径是合法导出样本；
+  独立 XML 解析与字节级 oracle 与 ASCII 路径同一合同。
 
 ## 4. 双端行为
 
@@ -62,9 +71,9 @@
 ## 5. 验收入口
 
 ```sh
-python tests/basic/verify_basic.py --profile vm    # 27 项
-python tests/basic/verify_basic.py --profile vue   # 22 项（需 17834/17835 空闲）
-python tests/desktop_mcp.py                        # VM 轨回归 31 项
+python tests/basic/verify_basic.py --profile vm    # 48 项（001 V-01..03 + 002 P-01..04）
+python tests/basic/verify_basic.py --profile vue   # 45 项（需 17834/17835 空闲；持久 profile）
+AUTO_BIN=<auto CLI> python tests/desktop_mcp.py    # VM 轨回归 31 项
 ```
 
 V-01 像素向量逐项一致（全白/全黑/单点/稀疏设计图，save→重开→load）；
@@ -72,3 +81,13 @@ V-02 SVG 导出（XML 解析、逐坐标逐色、oracle 逐字节、真实渲染
 坏数据拒绝与 v1 迁移、不可写路径失败可见。全同盘（全白/全黑）恢复为
 固定回归反例（历史债 P553-D1，工具链 v0.0.20-117-g873fa23 起不复现，
 不得以 SKIP 作为通过）。
+
+PAINT-002 增补（P 组）：P-01 门自足（有界就绪、坏 tool 非零失败、外来
+端口占用者不被清理）；P-02 强杀进程/浏览器树后同一存储或持久 profile
+重开 → Load 256 格逐项一致 → 再编辑再保存再重开；P-03 中文/空格路径、
+既有目标覆盖、vue 后端断开失败可见 + 恢复成功；P-04 变异反例证明
+oracle 非空洞（单格改色必红）、失败导出零文件、负控整体非零。
+vue 档浏览器使用运行自有 user-data-dir 持久 profile（launch_persistent
+_context），进程清理只及本次 spawn 的进程树（按启动前端口 pid 窗口
+判定），不触碰用户浏览器数据。证据稿见
+[002 standalone-decision](../../plans/evidence/002/standalone-decision.md)。

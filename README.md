@@ -2,7 +2,7 @@
 
 画板，使用 AutoLang / AutoUI 开发的独立应用。
 
-更新：2026-11-01。001已交付归档/r2、7/7；16×16/V2工程/SVG，原VM27/27、Vue22/22和desktop_mcp31项为冻结记录。 本轮未重跑产品验收。
+更新：2026-11-02。002 work段完成（待复审）：独立运行门VM48/48、Vue45/45、desktop_mcp31/31全绿（坏tool负控非零）；修复vue后端断开导出假成功。001的VM27/27、Vue22/22为001冻结记录。
 
 ## 运行
 
@@ -16,20 +16,20 @@ auto run -r vue --server vm # 浏览器（vue）档：front 17834 + 后端 17835
 前端端口：`17834`；导出后端端口：`17835`（`pac.at` `back_port`）。
 
 **vue 档必须带 `--server vm`**：本 app 无 rust 后端，默认 `auto run`
-（rust 后端生成）不可用；导出（SVG）依赖 17835 的 VM HTTP 服务，无后端时
-保存/加载仍可用、导出会显式失败。
+（rust 后端生成）不可用；导出（SVG）依赖 17835 的 VM HTTP 服务，后端断开
+时导出显式失败（无假成功）、画布与已保存工程不变，恢复后下一次导出成功。
 
 共享 StyleKit 已固定在 `vendor/stylekit`，无需相邻 auto-lang 示例目录。
 
 ## 验收
 
 ```sh
-python tests/basic/verify_basic.py --profile vm    # 基础能力（VM 轨）
-python tests/basic/verify_basic.py --profile vue   # 基础能力（vue 轨，17834/17835 需空闲）
-python tests/desktop_mcp.py                        # VM 轨回归（AUTO_BIN 指向 auto CLI）
+python tests/basic/verify_basic.py --profile vm    # 48 项（001 V组 + 002 P组）
+python tests/basic/verify_basic.py --profile vue   # 45 项（17834/17835 需空闲；运行自有持久浏览器 profile）
+AUTO_BIN=<auto CLI> python tests/desktop_mcp.py    # VM 轨回归 31 项（必须显式指定 AUTO_BIN）
 ```
 
-能力范围与合同见 [docs/specs/paint/basic-capabilities.md](docs/specs/paint/basic-capabilities.md)。
+能力范围与合同见 [docs/specs/paint/basic-capabilities.md](docs/specs/paint/basic-capabilities.md)；独立运行边界（两 profile、存储身份、冷准备、后端生命周期）见 [docs/specs/paint/standalone-runtime.md](docs/specs/paint/standalone-runtime.md)。
 
 ## 来源与组合
 
@@ -47,12 +47,12 @@ AutoOS 通过 [`apps/auto-paint`](https://github.com/auto-stack/auto-os/tree/mai
 开发使用独立 clone `D:/autostack/auto-paint` 的 main；AutoOS 内对应子模块仅固定已交付提交，流程见 [App开发与子模块](https://github.com/auto-stack/auto-os/blob/main/docs/design/strategy/app-submodule-workflow.md)。
 
 
-## 当前后续计划（2026-11-01）
+## 当前后续计划（2026-11-02）
 
-[PAINT-002：独立运行、跨重启工程与SVG验收](docs/plans/002-standalone-project-and-svg.md) 为 **drafting/r1、0/7，尚未实施**。固定原生KV与Vue同源localStorage两个profile，复验真实编辑、跨进程重开、下一次编辑和SVG逐格oracle；不强加新绘图功能。
+[PAINT-002：独立运行、跨重启工程与SVG验收](docs/plans/002-standalone-project-and-svg.md) 为 **execution_done/r1、5/7（work完成，待独立复审）**。两profile真实编辑/跨进程强杀重开/下一次编辑/SVG逐格oracle已全绿；修复vue后端断开导出假成功（app.at Export try/catch，PAINT-002唯一实证业务缺口）；Spec SD-01修订/SD-02新增已随work提交，待复审确认。
 
-先T-00核验实际源码/CLI/编译或渲染tool、已有SDK、冷准备与失败边界；实证缺项才转实际owner最小前置。既有测试入口继续复用，历史绿总数不能替代新必需UI操作。只用隔离数据/本次进程；不清共享target或终止用户实例。无实证业务缺口时不为完成计划强改业务源码。
+T-00决策稿见 [docs/plans/evidence/002/standalone-decision.md](docs/plans/evidence/002/standalone-decision.md)；探针与负控原始证据在 `D:/autostack/plan-artifacts/paint-002/`（本地，不入库）。复审通过后由merge归档/push。
 
-[路线图](docs/roadmap-v0.6.md) · [现实现规范](docs/specs/paint/basic-capabilities.md)。开发与顺序复审在D:/autostack/auto-paint独立clone main，一app一写入者；不在OS组合子模块开发，不建junction/symlink。本轮只准备/提交push计划和导航，不实现、不改Spec/旧ledger和归档，不更新AutoOSpin。各app独立验收后由统一OS计划装配，Linux仍WAIT_DISTRO_M1。
+[路线图](docs/roadmap-v0.6.md) · [现实现规范](docs/specs/paint/basic-capabilities.md) · [独立运行规范](docs/specs/paint/standalone-runtime.md)。开发与顺序复审在D:/autostack/auto-paint独立clone main，一app一写入者（复审期间暂停实现写入）；不在OS组合子模块开发，不建junction/symlink。归档/merge只完成本app的Spec/计划/提交push与自有临时产物收尾，不更新AutoOS gitlink、manifest或.gitmodules。
 
-保留16×16与SVG范围。VM文件KV、Vue同源localStorage不自动共享；002须复用同一持久profile证明跨进程重开。PNG、图层/大画布和跨端同步另排。
+保留16×16与SVG范围。VM文件KV、Vue同源localStorage不自动共享（两个已声明profile，不互享不是数据丢失）。PNG、图层/大画布和跨端同步另排。

@@ -1,12 +1,12 @@
 ---
 plan_id: PAINT-002
-status: drafting
+status: execution_done
 feature_name: "独立运行、跨重启工程与SVG验收"
 author: [Codex]
 created_at: 2026-11-01
-updated_at: 2026-11-01
+updated_at: 2026-11-02
 plan_revision: 1
-current_step: 1
+current_step: 5
 total_steps: 7
 base_branch: main
 base_commit: c1301656e5575f799875c51f31125e6557cb54d2
@@ -98,10 +98,14 @@ P用例owner_stage=work，T-02在既有入口建立所缺用例；不把重新�
 
 - [x] T-00（owner_stage=work；依赖001；AC-01..03）：核实正式profile/持久存储/后端/覆盖失败语义，输出有界决策稿。
   [✅ 已完成 2026-11-02] 决策稿 docs/plans/evidence/002/standalone-decision.md；§4 五SHA零漂移；探针 D:/autostack/plan-artifacts/paint-002/t00/（plan-002 目录被 DATABASE-002 占用，改用 paint-002）。VM：强杀重开→Load逐格一致→再编辑、中文/空格路径字节级oracle、既有目标整体覆盖、失败可见+恢复 全绿。vue：persistent profile 强杀浏览器重开一致、后端断开导出假成功（stale exported，生成器裸 await 抛出）为唯一实证业务缺口 → app.at try/catch 最小修复转 T-02。
-- [ ] T-01（owner_stage=work；依赖T-00；AC-01）：在既有门固定自有资源、准备/首启和错误判定，不强制Rust或清共享缓存。
-- [ ] T-02（owner_stage=work；依赖T-01；AC-02/03）：补P-01..04的真实重开/导出与反例，回放旧矩阵；只修实证缺口。
-- [ ] T-03（owner_stage=work；依赖T-02；AC-03）：证明失败后再次编辑/导出及负控非零，准备SD候选。
-- [ ] T-04（owner_stage=work；依赖T-03；AC-01..03）：核对漂移/覆盖，更新README/roadmap并提交execution_done。
+- [x] T-01（owner_stage=work；依赖T-00；AC-01）：在既有门固定自有资源、准备/首启和错误判定，不强制Rust或清共享缓存。
+  [✅ 已完成 2026-11-02] verify_basic.py：vue 档换运行自有 user-data-dir 持久浏览器 profile（launch_persistent_context）；进程/端口清理按 spawn 前 pid 窗口判定（外来占用者不清理）；P-01 门自足检查（自有存储/profile、有界就绪、外来端口可见）；坏 tool 负控 = 显式 FAIL + 退出码 1（negctl 实测 exit 1，无挂起）。
+- [x] T-02（owner_stage=work；依赖T-01；AC-02/03）：补P-01..04的真实重开/导出与反例，回放旧矩阵；只修实证缺口。
+  [✅ 已完成 2026-11-02] 唯一实证业务缺口修复：app.at Export try/catch（vue 后端断开 fetch reject → 显式 "export failed"，根除 stale exported 假成功；vue 生成器实测正确发射 try/catch，VM 档休眠分支）。P-02：vm 强杀进程树两次重开逐格一致+再编辑；vue 强杀浏览器树持久 profile 重开一致+再编辑。P-03：中文/空格路径字节级 oracle、既有目标整体覆盖、后端断开失败可见+零文件+恢复成功。P-04：变异反例（单格改色 oracle 必红）。V-01..03 旧矩阵原样回放。验收：vm 48/48、vue 45/45（attachments/002 报告 JSON）。
+- [x] T-03（owner_stage=work；依赖T-02；AC-03）：证明失败后再次编辑/导出及负控非零，准备SD候选。
+  [✅ 已完成 2026-11-02] 失败后再次编辑/导出已证（P-02/P-03）；desktop_mcp 31/31 回放 exit 0；坏 tool 负控整体非零（exit 1）；变异反例 oracle 非空洞。SD 候选落地：SD-01 basic-capabilities.md 修订（后端断开/覆盖/路径词汇/P组入口）、SD-02 standalone-runtime.md 新增（两 profile/存储身份/冷准备/导出后端生命周期）。
+- [x] T-04（owner_stage=work；依赖T-03；AC-01..03）：核对漂移/覆盖，更新README/roadmap并提交execution_done。
+  [✅ 已完成 2026-11-02] §4 五 SHA 基线零漂移后才动手；README/roadmap 更新（新计数 48/45/31、AUTO_BIN 必填、002 状态）；本计划状态 execution_done 5/7。
 - [ ] T-05（owner_stage=review；依赖T-04；AC-04）：同clone独立上下文最终复审。
 - [ ] T-06（owner_stage=merge；依赖T-05 pass；AC-05）：仅app规范/归档/提交push收尾。
 
@@ -109,6 +113,10 @@ P用例owner_stage=work，T-02在既有入口建立所缺用例；不把重新�
 
 - stage: new | plan_id: PAINT-002 | plan_revision: 1 | outcome: pass（有界T-00准备就绪；本轮没有实现或产品验收） | next: work/T-00（等待后续实施指令）。
 - 已归档001、现实现Spec和产品源码保持不变；规划结构/链接通过不等于功能通过。review以同一clone的独立上下文核验，不自动创建agent/chat或指定模型。
+- stage: work | plan_id: PAINT-002 | plan_revision: 1 | round: 1 | from: drafting | to: execution_done | outcome: pass | worktree: D:/autostack/auto-paint（本仓固定独立clone） | branch: main | base_commit: c130165 | code_commit: 见 git log（T-00 78cbec4，work段提交随后） | dependency_revisions: auto CLI 0.1.0+plan-890-verified-r7-t19-14-g47d8f7b（auto-man），auto-ui-tool 0.1.0 dcde8058 | task_ids: T-00,T-01,T-02,T-03,T-04 | evidence: docs/plans/evidence/002/standalone-decision.md；验收 vm 48/48、vue 45/45、desktop_mcp 31/31 exit 0；坏tool负控 exit 1；探针/负控原始记录 D:/autostack/plan-artifacts/paint-002/（本地scratch，不入库） | blockers: 无 | next_responsible_role: review（T-05 独立最终复审，AC-04）
+  - 唯一实证业务缺口：vue 后端断开导出假成功 → app.at Export try/catch 修复，生成器实测正确发射；VM 档休眠分支不受影响。
+  - 授权链：/goal 完成计划002 → /auto-plan-goal 全链授权（work/review/有界repair/merge）；scratch 用 paint-002 目录（plan-002 已被 DATABASE-002 占用）。
+  - 统一回归门：本仓无独立统一回归（verify_basic 两档 + desktop_mcp 即全部门）；已全部在冻结码上通过。
 
 ## 10. 待澄清事项
 

@@ -569,16 +569,23 @@ widget App {
 
         // ---- SVG 导出（back.api：VM 档进程内，vue 档经 VM HTTP 服务）。
         // fs.write 失败静默（T-01 ④）→ 后端回读返回磁盘实际内容，与期望
-        // SVG 全串比对：不一致/路径空 = 导出失败，状态可见，当前画布不动。----
+        // SVG 全串比对：不一致/路径空 = 导出失败，状态可见，当前画布不动。
+        // PAINT-002 T-02：vue 档后端断开时 fetch reject（生成器裸 await 抛出，
+        // 状态条停留 stale exported 假成功）→ try/catch 兜底置 export failed，
+        // 失败可见（决策稿 §4；VM 档进程内直调不会走 catch，休眠分支）。----
         .Export -> {
             if .export_path == "" {
                 .status = "export: path required"
             } else {
                 var svg = build_svg(.px)
-                var back = export_svg(.export_path, svg)
-                if back == svg {
-                    .status = "exported"
-                } else {
+                try {
+                    var back = export_svg(.export_path, svg)
+                    if back == svg {
+                        .status = "exported"
+                    } else {
+                        .status = "export failed"
+                    }
+                } catch {
                     .status = "export failed"
                 }
             }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PAINT-001 basic-capabilities acceptance entry (T-05).
+"""PAINT-001/002 basic-capabilities acceptance entry (001 T-05, 002 T-01/T-02).
 
 Real-app, real-UI acceptance for both render tracks:
 
@@ -10,10 +10,13 @@ Real-app, real-UI acceptance for both render tracks:
         (same harness family as tests/desktop_mcp.py).
 - vue : `auto run -r vue --server vm` (front 17834 via vite, back 17835 via
         VM HTTP service) + Playwright chromium driving the real browser UI.
-        Project save/load uses browser localStorage (fresh context = clean
-        state); export goes through the back api to a real file.
+        Project save/load uses browser localStorage. 002 T-01: the browser
+        runs a persistent profile (run-owned user-data-dir), so state
+        survives a real browser process kill/restart (P-02); server-side
+        cleanup kills only pids that appeared during our own spawn window.
 
-Coverage per plan §6:
+Coverage per 001 plan §6 (V-01..V-03, replayed unchanged) and 002 plan §6
+(P-01..P-04):
 - V-01 pixel vector fidelity (256 items, per-cell colors) across
   save/load/undo/redo for uniform white, uniform black, single point and a
   sparse designed pattern — no SKIP path for uniform snapshots (P553-D1
@@ -24,10 +27,22 @@ Coverage per plan §6:
 - V-03 failure paths: bad v1 (255 items), bad v2 header, illegal colors,
   unwritable/empty export paths — rejections must not touch the current
   canvas; legal old v1 works must reopen (migration).
+- P-01 (002, AC-01) standalone gate self-sufficiency: bounded boot
+  readiness with explicit failure, foreign port users respected, own
+  temp storage/profile/ports only.
+- P-02 (002, AC-02) cross-process reopen: strong-kill the app (vm) or the
+  whole browser tree (vue), reopen the SAME persistent storage/profile,
+  Load -> 256-cell identical, next edit -> Save -> reopen again.
+- P-03 (002, AC-02/03) export semantics: Chinese/space paths, existing
+  target overwrite, backend-down failure visible (no false "exported"),
+  canvas/project preserved, recovery export succeeds.
+- P-04 (002, AC-03) counterexample controls: mutation control proves the
+  oracle detects one-cell color corruption (suite would go red/nonzero);
+  failed export must not create a file; 001 rejection matrix replayed.
 
 Evidence policy: this script writes a JSON report with versions, fixture
 hashes, per-check results and original failure details to --report-dir
-(default: docs/plans/attachments/001/, local-only, never committed).
+(default: docs/plans/attachments/002/, local-only, never committed).
 """
 import argparse
 import hashlib
@@ -77,6 +92,16 @@ def port_busy(port):
         s.close()
 
 
+def port_pids(port):
+    out = subprocess.run(["netstat", "-ano"], capture_output=True,
+                         text=True).stdout
+    pids = set()
+    for line in out.splitlines():
+        if f":{port} " in line and "LISTENING" in line:
+            pids.add(line.split()[-1])
+    return pids
+
+
 def wait_port_free(port, timeout=40):
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -97,6 +122,19 @@ def expected_svg(px):
                          f'fill="{c}"/>')
     parts.append("</svg>")
     return "".join(parts)
+
+
+def svg_cell_points(content):
+    """[(x, y, fill)] for the non-white cell rects of a parsed SVG, or None
+    if the content does not parse as an svg with a white base rect."""
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return None
+    if root.tag != SVG_NS + "svg":
+        return None
+    rects = root.findall(SVG_NS + "rect")
+    return [(r.get("x"), r.get("y"), r.get("fill")) for r in rects[1:]]
 
 
 def parse_px_state(state_text):
@@ -146,11 +184,17 @@ class VmSession:
     def __init__(self, storage_path, report):
         self.port = free_port(9400)
         self.storage = storage_path
+        self.ready = False
         env = {**os.environ, "AUTOUI_MCP_PORT": str(self.port),
                "AUTO_VM_STORAGE_FILE": storage_path}
-        self.proc = subprocess.Popen(
-            [AUTO_BIN, "run", "-r", "vm"], cwd=PROJ, env=env,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            self.proc = subprocess.Popen(
+                [AUTO_BIN, "run", "-r", "vm"], cwd=PROJ, env=env,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            self.proc = None
+            report.check("vm-boot", "vm app spawned", False, str(e))
+            return
         self.url = f"http://127.0.0.1:{self.port}/mcp"
         self.ready = False
         for _ in range(90):
@@ -277,11 +321,13 @@ class VmSession:
         self.call("autoui_action", element_id=cells[index], action="press")
 
     def close(self):
-        try:
-            subprocess.run(["taskkill", "/PID", str(self.proc.pid), "/T", "/F"],
-                           capture_output=True)
-        except Exception:
-            pass
+        """Strong-kill our own spawned process tree (P-02 kill semantics)."""
+        if self.proc is not None:
+            try:
+                subprocess.run(["taskkill", "/PID", str(self.proc.pid), "/T", "/F"],
+                               capture_output=True)
+            except Exception:
+                pass
         time.sleep(3)
         wait_port_free(self.port)
 
@@ -296,7 +342,21 @@ def run_vm_profile(report, evidence_dir):
         return 1
     out_svg = os.path.join(tempfile.gettempdir(),
                            f"paint-verify-vm-{int(time.time())}.svg").replace("\\", "/")
+    # sparse designed pattern shared by V-01/V-02 and the 002 additions
+    pts = [(0, 0), (15, 0), (7, 0), (0, 7),
+           (7, 7), (8, 8), (15, 8), (0, 15), (8, 15), (15, 15)]
+    want = [WHITE] * 256
+    for c, r in pts:
+        want[r * 16 + c] = RED
     try:
+        # ── P-01: standalone gate self-sufficiency (bounded readiness,
+        # own resources; foreign state respected) ──
+        print("\nP-01 [vm]: gate prep / first boot self-sufficiency")
+        check0 = lambda name, cond, detail="": report.check("P-01", name, cond, detail)
+        check0("isolated storage file owned by run",
+               os.path.exists(storage) and tempfile.gettempdir() in storage, storage)
+        check0("boot readiness bounded (rendered first frame)", s.ready, "not ready")
+
         # ── V-01: pixel vector fidelity through real UI ops ──
         print("\nV-01 [vm]: pixel vector fidelity (256 items, per-cell)")
         check = lambda name, cond, detail="": report.check("V-01", name, cond, detail)
@@ -363,11 +423,6 @@ def run_vm_profile(report, evidence_dir):
         # + center pair — 10 reds.
         s.click("New")
         time.sleep(0.5)
-        pts = [(0, 0), (15, 0), (7, 0), (0, 7),
-               (7, 7), (8, 8), (15, 8), (0, 15), (8, 15), (15, 15)]
-        want = [WHITE] * 256
-        for c, r in pts:
-            want[r * 16 + c] = RED
         report.fixtures["sparse_points"] = sha256(json.dumps(pts))
         for c, r in pts:
             s.paint(r * 16 + c, 1)
@@ -432,6 +487,96 @@ def run_vm_profile(report, evidence_dir):
                s.status() == "export failed", s.status())
         check2("canvas preserved after failed export", s.px() == px_before, "px changed")
 
+        # ── P-02 [vm]: strong-kill cross-process reopen + next edit ──
+        # storage currently holds the sparse pattern (saved in V-01).
+        print("\nP-02 [vm]: strong-kill cross-process reopen, next edit")
+        checkp2 = lambda name, cond, detail="": report.check("P-02", name, cond, detail)
+        want_a = list(want)
+        want_a[55] = DARK
+        s.paint(55, 0)
+        time.sleep(0.3)
+        checkp2("next edit after V-02 flow painted", s.px() == want_a, "px mismatch")
+        s.click("Save")
+        time.sleep(0.6)
+        checkp2("save status", s.status() == "saved", s.status())
+        pid1 = s.proc.pid
+        s.close()
+        report.fixtures["vm_kill1_pid"] = str(pid1)
+        s = VmSession(storage, report)
+        if not s.ready:
+            return 1
+        px = s.px()
+        checkp2("fresh boot starts white (no auto-load)",
+                len(px) == 256 and all(c == WHITE for c in px), f"len={len(px)}")
+        s.click("Load")
+        time.sleep(0.8)
+        checkp2("reopen same storage -> Load 256-cell identical", s.px() == want_a,
+                f"red={s.px().count(RED)}")
+        s.paint(100, 0)
+        time.sleep(0.3)
+        want_b = list(want_a)
+        want_b[100] = DARK
+        checkp2("edit after reopen works", s.px() == want_b, "px mismatch")
+        s.click("Save")
+        time.sleep(0.6)
+        s.close()
+        s = VmSession(storage, report)
+        if not s.ready:
+            return 1
+        s.click("Load")
+        time.sleep(0.8)
+        checkp2("second reopen -> Load still identical", s.px() == want_b,
+                f"red={s.px().count(RED)} dark={s.px().count(DARK)}")
+
+        # ── P-03 [vm]: export paths, overwrite, failure recovery ──
+        print("\nP-03 [vm]: Chinese/space path, overwrite, failure+recovery")
+        checkp3 = lambda name, cond, detail="": report.check("P-03", name, cond, detail)
+        cn_dir = os.path.join(tempfile.gettempdir(), "paint-verify 中文 目录")
+        os.makedirs(cn_dir, exist_ok=True)
+        cn_path = os.path.join(cn_dir, "画作 测试.svg").replace("\\", "/")
+        oracle_b = expected_svg(want_b)
+        checkp3("Chinese/space path set via UI", s.set_path(cn_path), "input mismatch")
+        s.click("Export")
+        time.sleep(2)
+        checkp3("Chinese/space path exported", s.status() == "exported", s.status())
+        content_b = open(cn_path, encoding="utf-8").read() if os.path.exists(cn_path) else ""
+        checkp3("Chinese/space path file byte-equals oracle", content_b == oracle_b,
+                f"len={len(content_b)}/{len(oracle_b)}")
+        # overwrite existing target: export different content to the SAME path
+        s.paint(150, 0)
+        time.sleep(0.3)
+        want_c = list(want_b)
+        want_c[150] = DARK
+        oracle_c = expected_svg(want_c)
+        s.click("Export")
+        time.sleep(2)
+        content_c = open(cn_path, encoding="utf-8").read() if os.path.exists(cn_path) else ""
+        checkp3("existing target overwritten with new content",
+                content_c == oracle_c and content_c != content_b,
+                f"len={len(content_c)}")
+        # failure: nonexistent directory -> visible failure, no file, canvas intact
+        px_before = s.px()
+        bad_path = os.path.join(tempfile.gettempdir(),
+                                f"paint-verify-no-such-dir-{int(time.time())}",
+                                "x.svg").replace("\\", "/")
+        s.set_path(bad_path)
+        s.click("Export")
+        time.sleep(2)
+        checkp3("bad dir -> 'export failed' visible", s.status() == "export failed",
+                s.status())
+        checkp3("failed export created no file", not os.path.exists(bad_path), bad_path)
+        checkp3("canvas preserved after failed export", s.px() == px_before, "px changed")
+        # recovery: next export to a good path succeeds
+        rec_path = os.path.join(tempfile.gettempdir(),
+                                f"paint-verify-vm-recovery-{int(time.time())}.svg").replace("\\", "/")
+        s.set_path(rec_path)
+        s.click("Export")
+        time.sleep(2)
+        checkp3("recovery export succeeds", s.status() == "exported", s.status())
+        checkp3("recovery file byte-equals oracle",
+                os.path.exists(rec_path) and
+                open(rec_path, encoding="utf-8").read() == oracle_c, rec_path)
+
         # ── V-03: bad data rejection + v1 migration ──
         print("\nV-03 [vm]: failure paths & migration")
         check3 = lambda name, cond, detail="": report.check("V-03", name, cond, detail)
@@ -483,6 +628,27 @@ def run_vm_profile(report, evidence_dir):
         time.sleep(0.8)
         check3("undo to stack bottom -> 'nothing to undo' visible",
                s.status() == "nothing to undo", s.status())
+
+        # ── P-04: counterexample controls (oracle non-vacuity) ──
+        print("\nP-04 [vm]: mutation control, no-file control")
+        checkp4 = lambda name, cond, detail="": report.check("P-04", name, cond, detail)
+        # mutation control: corrupt one cell fill on disk -> the suite's own
+        # per-cell and byte oracles must detect it (a wrong-color export
+        # regression would fail this suite, i.e. nonzero exit).
+        mutated = content_c.replace(f'fill="{DARK}"', f'fill="{RED}"', 1)
+        checkp4("mutation applied differs from export", mutated != content_c,
+                "replace no-op")
+        got = svg_cell_points(mutated)
+        expect_pts = [(str(i % 16), str(i // 16), c) for i, c in enumerate(want_c)
+                      if c != WHITE]
+        checkp4("per-cell oracle detects one-cell corruption",
+                got != expect_pts,
+                f"first diff={next((a for a, b in zip(got or [], expect_pts) if a != b), None)}")
+        checkp4("byte oracle detects corruption", mutated != oracle_c, "byte equal?!")
+        # missing-export counterexample replay: the P-03 failure path produced
+        # no file (assertion bound here so removal of that check breaks P-04)
+        checkp4("failed export left no output (replay)", not os.path.exists(bad_path),
+                bad_path)
     finally:
         s.close()
     return 0
@@ -495,43 +661,11 @@ BACK = "http://127.0.0.1:17835"
 
 
 class VueSession:
-    def __init__(self, report):
-        from playwright.sync_api import sync_playwright
-        self.pw = sync_playwright().start()
-        self.browser = self.pw.chromium.launch(headless=True)
-        self.context = self.browser.new_context()
-        self.page = self.context.new_page()
-        self.ready = False
-        for _ in range(60):
-            try:
-                r = requests.get(FRONT + "/", timeout=3)
-                if r.status_code == 200:
-                    break
-            except Exception:
-                time.sleep(2)
-        try:
-            self.page.goto(FRONT, wait_until="networkidle", timeout=60000)
-            self.page.wait_for_selector(".w-5.h-5", timeout=30000)
-            self.ready = True
-        except Exception as e:
-            report.check("vue-boot", "vue app rendered first frame", False, str(e))
+    """UI helpers on top of a (persistent) browser context."""
 
-    def cells(self):
-        return self.page.locator(".w-5.h-5.cursor-pointer")
-
-    def swatches(self):
-        return self.page.locator(".w-6.h-6.rounded")
-
-    def button(self, label):
-        return self.page.get_by_role("button", name=label, exact=False)
-
-    def click_cell(self, index):
-        self.cells().nth(index).click()
-        self.page.wait_for_timeout(120)
-
-    def click_swatch(self, pos):
-        self.swatches().nth(pos).click()
-        self.page.wait_for_timeout(120)
+    def __init__(self, ctx):
+        self.ctx = ctx
+        self.page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
     def px(self):
         """256 hex list read from cell classes (real DOM observation)."""
@@ -548,41 +682,102 @@ class VueSession:
         el = self.page.locator(".ml-auto.text-xs")
         return el.text_content() or ""
 
+    def button(self, label):
+        return self.page.get_by_role("button", name=label, exact=False)
+
+    def cells(self):
+        return self.page.locator(".w-5.h-5.cursor-pointer")
+
+    def swatches(self):
+        return self.page.locator(".w-6.h-6.rounded")
+
+    def click_cell(self, index):
+        self.cells().nth(index).click()
+        self.page.wait_for_timeout(120)
+
+    def click_swatch(self, pos):
+        self.swatches().nth(pos).click()
+        self.page.wait_for_timeout(120)
+
     def set_path(self, path):
         inp = self.page.locator("input")
         inp.fill(path)
         self.page.wait_for_timeout(150)
         return inp.input_value() == path
 
+
+class VueBrowser:
+    """Persistent-profile browser lifecycle (002 T-01).
+
+    The chromium process tree belongs to this run: `hard_kill` terminates it
+    by matching our own user-data-dir on the command line, never by port or
+    name similarity. Relaunching with the same user-data-dir is the real
+    cross-process reopen for the vue storage profile (P-02).
+    """
+
+    def __init__(self, report, udd):
+        from playwright.sync_api import sync_playwright
+        self.report = report
+        self.udd = udd
+        self.pw = sync_playwright().start()
+        self.ctx = None
+
+    def open(self, timeout_ms=30000):
+        self.ctx = self.pw.chromium.launch_persistent_context(
+            self.udd, headless=True, viewport={"width": 1280, "height": 900})
+        page = self.ctx.pages[0] if self.ctx.pages else self.ctx.new_page()
+        page.goto(FRONT, wait_until="networkidle", timeout=90000)
+        page.wait_for_selector(".w-5.h-5", timeout=timeout_ms)
+        return VueSession(self.ctx)
+
+    def hard_kill(self):
+        """Strong-kill the whole chromium tree we spawned (own profile dir)."""
+        try:
+            out = subprocess.run(
+                ["wmic", "process", "where",
+                 f"commandline like '%{self.udd.replace('\\', '/')[:48]}%'",
+                 "get", "processid"], capture_output=True, text=True).stdout
+            pids = [l.strip() for l in out.splitlines() if l.strip().isdigit()]
+            for pid in pids:
+                subprocess.run(["taskkill", "/PID", pid, "/T", "/F"],
+                               capture_output=True)
+        except Exception:
+            pass
+        try:
+            if self.ctx is not None:
+                self.ctx.close()
+        except Exception:
+            pass
+        self.ctx = None
+        time.sleep(2)
+
     def close(self):
         try:
-            self.context.close()
-            self.browser.close()
-        finally:
+            if self.ctx is not None:
+                self.ctx.close()
+        except Exception:
+            pass
+        try:
             self.pw.stop()
+        except Exception:
+            pass
 
 
 class VueApp:
     """Restart-tolerant handle for `auto run -r vue --server vm`.
 
-    Framework observation (T-05): the dev-server supervisor exits on its own
-    ~90-100s after start (`pnpm exited with code Some(143)`); project state
-    lives in browser localStorage, so a restart + page reload is transparent
-    to acceptance flow. The driver restarts the app at phase boundaries.
+    Framework observation (001 T-05): the dev-server supervisor exits on its
+    own ~90-100s after start (`pnpm exited with code Some(143)`); project
+    state lives in browser localStorage, so a restart + page reload is
+    transparent to acceptance flow. The driver restarts the app at phase
+    boundaries. 002 T-01: port cleanup sweeps only pids that appeared during
+    our own spawn window (pre-start listeners are foreign and respected).
     """
 
     def __init__(self):
         self.proc = None
         self.log = None
-
-    @staticmethod
-    def _port_pid(port):
-        out = subprocess.run(["netstat", "-ano"], capture_output=True,
-                             text=True).stdout
-        for line in out.splitlines():
-            if f":{port} " in line and "LISTENING" in line:
-                return line.split()[-1]
-        return None
+        self.pre = {17834: port_pids(17834), 17835: port_pids(17835)}
 
     @staticmethod
     def alive():
@@ -607,20 +802,36 @@ class VueApp:
                                 "/F"], capture_output=True)
             self.proc = None
         for port in (17834, 17835):
-            pid = self._port_pid(port)
-            if pid:
+            for pid in port_pids(port) - self.pre[port]:
                 subprocess.run(["taskkill", "/PID", pid, "/T", "/F"],
                                capture_output=True)
         wait_port_free(17834)
         wait_port_free(17835)
 
+    def kill_back_only(self):
+        """Kill only the 17835 listener that appeared during our spawn."""
+        for pid in port_pids(17835) - self.pre[17835]:
+            subprocess.run(["taskkill", "/PID", pid, "/T", "/F"],
+                           capture_output=True)
+        time.sleep(2)
+        try:
+            requests.get(BACK + "/", timeout=2)
+            return False
+        except Exception:
+            return True
+
     def start(self):
         self.stop()
         self.log = open(os.path.join(tempfile.gettempdir(),
                                      "paint-verify-vue.log"), "w")
-        self.proc = subprocess.Popen(
-            [AUTO_BIN, "run", "-r", "vue", "--server", "vm"], cwd=PROJ,
-            stdout=self.log, stderr=subprocess.STDOUT)
+        try:
+            self.proc = subprocess.Popen(
+                [AUTO_BIN, "run", "-r", "vue", "--server", "vm"], cwd=PROJ,
+                stdout=self.log, stderr=subprocess.STDOUT)
+        except OSError as e:
+            self.proc = None
+            print(f"[vue] spawn failed: {e}")
+            return False
         deadline = time.time() + 150
         while time.time() < deadline:
             if self.alive():
@@ -633,22 +844,40 @@ class VueApp:
 
 def run_vue_profile(report, evidence_dir):
     app = VueApp()
+    udd = os.path.join(tempfile.gettempdir(),
+                       f"paint-verify-vue-profile-{int(time.time())}")
     out_svg = os.path.join(tempfile.gettempdir(),
                            f"paint-verify-vue-{int(time.time())}.svg").replace("\\", "/")
+    br = None
     s = None
     try:
+        # ── P-01: gate prep — foreign port users respected, bounded boot ──
+        print("\nP-01 [vue]: gate prep / first boot self-sufficiency")
+        check0 = lambda name, cond, detail="": report.check("P-01", name, cond, detail)
+        check0("front port free before start (foreign users respected)",
+               not app.pre[17834], f"pids={app.pre[17834]}")
+        check0("back port free before start (foreign users respected)",
+               not app.pre[17835], f"pids={app.pre[17835]}")
         if not app.start():
             report.check("vue-boot", "vue dev server up (front+back)", False,
                          "not listening within 150s")
             return 1
-        s = VueSession(report)
-        if not s.ready:
-            return 1
+        report.check("vue-boot", "vue dev server up (front+back)", True)
+        br = VueBrowser(report, udd)
+        s = br.open()
+        report.check("vue-boot", "vue app rendered first frame (persistent profile)",
+                     True, udd)
 
-        def ensure(tag, restore_load):
+        pts = [(0, 0), (15, 0), (7, 0), (0, 7),
+               (7, 7), (8, 8), (15, 8), (0, 15), (8, 15), (15, 15)]
+        want = [WHITE] * 256
+        for c, r in pts:
+            want[r * 16 + c] = RED
+
+        def ensure_up(tag, restore_load):
             """Restart the dev server if the framework ended it; after a
             restart the in-memory canvas is gone, so optionally restore via
-            Load (localStorage survives in the browser context)."""
+            Load (localStorage survives in the persistent browser)."""
             if VueApp.alive():
                 return True
             report.versions[f"restarted_before_{tag}"] = "yes"
@@ -687,11 +916,6 @@ def run_vue_profile(report, evidence_dir):
 
         # same sparse designed pattern as the vm profile (10 reds, simple
         # figure for import/export cases per 2026-10-29 user ruling)
-        pts = [(0, 0), (15, 0), (7, 0), (0, 7),
-               (7, 7), (8, 8), (15, 8), (0, 15), (8, 15), (15, 15)]
-        want = [WHITE] * 256
-        for c, r in pts:
-            want[r * 16 + c] = RED
         report.fixtures["sparse_points"] = sha256(json.dumps(pts))
         s.click_swatch(1)
         for c, r in pts:
@@ -714,7 +938,7 @@ def run_vue_profile(report, evidence_dir):
 
         print("\nV-02 [vue]: SVG export")
         check2 = lambda name, cond, detail="": report.check("V-02", name, cond, detail)
-        if not ensure("V-02", restore_load=True):
+        if not ensure_up("V-02", restore_load=True):
             return 1
         if os.path.exists(out_svg):
             os.remove(out_svg)
@@ -746,7 +970,7 @@ def run_vue_profile(report, evidence_dir):
         else:
             check2("export file exists", False, out_svg)
         # real render in chromium
-        render_page = s.context.new_page()
+        render_page = s.ctx.new_page()
         render_page.goto("file:///" + out_svg.replace("\\", "/"))
         render_page.wait_for_timeout(800)
         shot = os.path.join(evidence_dir, f"vue-svg-render-{int(time.time())}.png")
@@ -767,9 +991,101 @@ def run_vue_profile(report, evidence_dir):
         check2("canvas preserved after failed export", s.px() == px_before,
                "px changed")
 
+        # ── P-02 [vue]: hard-kill the browser tree -> reopen persistent
+        # profile -> Load identical -> next edit (true cross-process reopen
+        # for the localStorage profile) ──
+        print("\nP-02 [vue]: browser hard-kill reopen via persistent profile")
+        checkp2 = lambda name, cond, detail="": report.check("P-02", name, cond, detail)
+        if not ensure_up("P-02", restore_load=False):
+            return 1
+        br.hard_kill()
+        s = br.open()
+        px = s.px()
+        checkp2("fresh browser starts white (no auto-load)",
+                len(px) == 256 and all(c == WHITE for c in px), f"len={len(px)}")
+        s.button("Load").click()
+        s.page.wait_for_timeout(600)
+        checkp2("persistent profile -> Load 256-cell identical", s.px() == want,
+                f"red={s.px().count(RED)}")
+        s.click_swatch(0)
+        s.click_cell(55)
+        want_a = list(want)
+        want_a[55] = DARK
+        checkp2("next edit after reopen works", s.px() == want_a, "px mismatch")
+        s.button("Save").click()
+        s.page.wait_for_timeout(400)
+        checkp2("save after reopen", s.status() == "saved", s.status())
+
+        # ── P-03 [vue]: Chinese/space path, overwrite, backend-down failure
+        # visible + recovery ──
+        print("\nP-03 [vue]: export paths, backend-down failure, recovery")
+        checkp3 = lambda name, cond, detail="": report.check("P-03", name, cond, detail)
+        if not ensure_up("P-03", restore_load=True):
+            return 1
+        cn_dir = os.path.join(tempfile.gettempdir(), "paint-verify 中文 输出")
+        os.makedirs(cn_dir, exist_ok=True)
+        cn_path = os.path.join(cn_dir, "画作 测试.svg").replace("\\", "/")
+        oracle_a = expected_svg(want_a)
+        checkp3("Chinese/space path set via UI", s.set_path(cn_path), "input mismatch")
+        s.button("Export").click()
+        s.page.wait_for_timeout(2000)
+        checkp3("Chinese/space path exported", s.status() == "exported", s.status())
+        content_a = open(cn_path, encoding="utf-8").read() if os.path.exists(cn_path) else ""
+        checkp3("Chinese/space path file byte-equals oracle", content_a == oracle_a,
+                f"len={len(content_a)}/{len(oracle_a)}")
+        # overwrite existing target
+        s.click_swatch(0)
+        s.click_cell(100)
+        want_b = list(want_a)
+        want_b[100] = DARK
+        oracle_b = expected_svg(want_b)
+        s.button("Export").click()
+        s.page.wait_for_timeout(2000)
+        content_b = open(cn_path, encoding="utf-8").read() if os.path.exists(cn_path) else ""
+        checkp3("existing target overwritten with new content",
+                content_b == oracle_b and content_b != content_a, f"len={len(content_b)}")
+        # backend down: export fails VISIBLY (no stale 'exported'), no file,
+        # canvas/project untouched
+        down = app.kill_back_only()
+        checkp3("back 17835 down after own-pid kill", down, "back still alive")
+        px_before = s.px()
+        fail_path = os.path.join(tempfile.gettempdir(),
+                                 f"paint-verify-vue-fail-{int(time.time())}.svg").replace("\\", "/")
+        s.set_path(fail_path)
+        s.button("Export").click()
+        s.page.wait_for_timeout(3000)
+        checkp3("backend down -> 'export failed' visible (no false success)",
+                s.status() == "export failed", s.status())
+        checkp3("backend down -> no file written", not os.path.exists(fail_path),
+                fail_path)
+        checkp3("canvas preserved after backend-down export", s.px() == px_before,
+                "px changed")
+        # recovery: restart app, reload page, Load, next export succeeds.
+        # storage holds the last SAVE (want_a from P-02); the unsaved cell-100
+        # edit lived only in the old page, so Load must restore want_a.
+        if not app.start():
+            report.check("vue-lifecycle", "app restart for recovery", False,
+                         "not listening")
+            return 1
+        s.page.goto(FRONT, wait_until="networkidle", timeout=60000)
+        s.page.wait_for_selector(".w-5.h-5", timeout=30000)
+        s.button("Load").click()
+        s.page.wait_for_timeout(600)
+        checkp3("recovery: Load identical after app restart", s.px() == want_a,
+                f"red={s.px().count(RED)} dark={s.px().count(DARK)}")
+        rec_path = os.path.join(tempfile.gettempdir(),
+                                f"paint-verify-vue-recovery-{int(time.time())}.svg").replace("\\", "/")
+        s.set_path(rec_path)
+        s.button("Export").click()
+        s.page.wait_for_timeout(2500)
+        checkp3("recovery export succeeds", s.status() == "exported", s.status())
+        checkp3("recovery file byte-equals oracle",
+                os.path.exists(rec_path) and
+                open(rec_path, encoding="utf-8").read() == oracle_a, rec_path)
+
         print("\nV-03 [vue]: failure paths & migration (localStorage)")
         check3 = lambda name, cond, detail="": report.check("V-03", name, cond, detail)
-        if not ensure("V-03", restore_load=False):
+        if not ensure_up("V-03", restore_load=False):
             return 1
         s.button("New").click()
         s.page.wait_for_timeout(300)
@@ -795,7 +1111,7 @@ def run_vue_profile(report, evidence_dir):
         px = s.px()
         check3("v1 migration vector exact (256 red)",
                len(px) == 256 and all(c == RED for c in px),
-               f"red={px.count(RED)}")
+               f"red={px.count(RED) if px else 0}")
         # illegal color
         v1_bad = "|".join([" bg-[#ef4444] "] * 255 + [" bg-[#00ff00] "])
         report.fixtures["v1_illegal"] = sha256(v1_bad)
@@ -807,10 +1123,25 @@ def run_vue_profile(report, evidence_dir):
                s.status())
         check3("canvas unchanged after illegal v1", s.px() == px_before,
                "px changed")
+
+        # ── P-04 [vue]: counterexample controls ──
+        print("\nP-04 [vue]: mutation control, no-file control")
+        checkp4 = lambda name, cond, detail="": report.check("P-04", name, cond, detail)
+        mutated = content_b.replace(f'fill="{DARK}"', f'fill="{RED}"', 1)
+        checkp4("mutation applied differs from export", mutated != content_b,
+                "replace no-op")
+        got = svg_cell_points(mutated)
+        expect_pts = [(str(i % 16), str(i // 16), c) for i, c in enumerate(want_b)
+                      if c != WHITE]
+        checkp4("per-cell oracle detects one-cell corruption",
+                got != expect_pts, "mutation undetected")
+        checkp4("byte oracle detects corruption", mutated != oracle_b, "byte equal?!")
+        checkp4("backend-down export left no output (replay)",
+                not os.path.exists(fail_path), fail_path)
     finally:
         app.stop()
-        if s is not None:
-            s.close()
+        if br is not None:
+            br.close()
     return 0
 
 
@@ -819,7 +1150,7 @@ def main():
     ap.add_argument("--profile", choices=["vm", "vue"], required=True)
     ap.add_argument("--report-dir",
                     default=os.path.join(PROJ, "docs", "plans", "attachments",
-                                         "001"))
+                                         "002"))
     args = ap.parse_args()
 
     print(f"[verify_basic] profile={args.profile} project={PROJ}")
