@@ -49,7 +49,7 @@ AutoOS 通过 [`apps/auto-paint`](https://github.com/auto-stack/auto-os/tree/mai
 
 ## 当前后续计划（2026-11-02）
 
-[PAINT-002：独立运行、跨重启工程与SVG验收](docs/plans/002-standalone-project-and-svg.md) 为 **execution_done/r1、5/7（work完成，待独立复审）**。两profile真实编辑/跨进程强杀重开/下一次编辑/SVG逐格oracle已全绿；修复vue后端断开导出假成功（app.at Export try/catch，PAINT-002唯一实证业务缺口）；Spec SD-01修订/SD-02新增已随work提交，待复审确认。
+[PAINT-002：独立运行、跨重启工程与SVG验收](docs/plans/archived/002-standalone-project-and-svg.md) **已交付归档/r1、7/7**（2026-11-02）：两profile真实编辑/跨进程强杀重开/下一次编辑/SVG逐格oracle全绿（vm 50/0×5连续绿跨独立上下文、vue 45/45、desktop_mcp31/31、坏tool负控非零）；修复vue后端断开导出假成功（app.at Export try/catch，PAINT-002唯一实证业务缺口）；独立复审3轮（2轮needs_fix修复后pass，红跑全披露）。
 
 T-00决策稿见 [docs/plans/evidence/002/standalone-decision.md](docs/plans/evidence/002/standalone-decision.md)；探针与负控原始证据在 `D:/autostack/plan-artifacts/paint-002/`（本地，不入库）。复审通过后由merge归档/push。
 

@@ -5,7 +5,7 @@
 | 顺序 | 计划/成果 | 当前状态与边界 |
 |---|---|---|
 | 基础 | [001首轮能力](plans/archived/001-reliable-pixel-paint.md) | 001已交付归档/r2、7/7；16×16/V2工程/SVG，VM27/27、Vue22/22和desktop_mcp31项为001冻结记录。 |
-| 当前优先 | [PAINT-002：独立运行、跨重启工程与SVG验收](plans/002-standalone-project-and-svg.md) | execution_done/r1、5/7（work完成待复审）：VM50/50×2、Vue45/45×2、desktop_mcp31/31连续绿+坏tool负控非零（review R-1门竞态已修复并披露红跑）；修复vue后端断开导出假成功（app.at try/catch）；Spec SD-01修订/SD-02新增待复审确认。 |
+| 已交付 | [PAINT-002：独立运行、跨重启工程与SVG验收](plans/archived/002-standalone-project-and-svg.md) | 002已交付归档/r1、7/7（独立复审3轮pass，R-1..R-4关闭）：VM50/50×5连续绿、Vue45/45、desktop_mcp31/31+坏tool负控非零；修复vue后端断开导出假成功；Spec SD-01修订/SD-02新增已落地。 |
 | 之后 | AutoOS统一装配 | 另立统一OS计划，接收各app单独验证/推送的精确提交；本轮不改pin |
 | 之后 | Linux支持 | WAIT_DISTRO_M1，等Nix＋COSMIC发行版基础；不阻塞本app本机任务 |
 
