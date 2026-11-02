@@ -1,12 +1,12 @@
 ---
 plan_id: PAINT-002
-status: executing
+status: reviewed
 feature_name: "独立运行、跨重启工程与SVG验收"
 author: [Codex]
 created_at: 2026-11-01
 updated_at: 2026-11-02
 plan_revision: 1
-current_step: 5
+current_step: 6
 total_steps: 7
 base_branch: main
 base_commit: c1301656e5575f799875c51f31125e6557cb54d2
@@ -106,7 +106,8 @@ P用例owner_stage=work，T-02在既有入口建立所缺用例；不把重新�
   [✅ 已完成 2026-11-02]（↩ review R-1/R-3 重开 → 已修复复绿：新增 vm 未保存编辑反例（P-02 50项含2新检查），负控复跑 exit 1）失败后再次编辑/导出已证（P-02/P-03）；desktop_mcp 31/31 回放 exit 0；坏 tool 负控整体非零（exit 1）；变异反例 oracle 非空洞。SD 候选落地：SD-01 basic-capabilities.md 修订（后端断开/覆盖/路径词汇/P组入口）、SD-02 standalone-runtime.md 新增（两 profile/存储身份/冷准备/导出后端生命周期）。
 - [x] T-04（owner_stage=work；依赖T-03；AC-01..03）：核对漂移/覆盖，更新README/roadmap并提交execution_done。
   [✅ 已完成 2026-11-02]（↩ review R-1 重开 → 已修复复绿：README/roadmap 计数更新为 50/45/31）§4 五 SHA 基线零漂移后才动手；README/roadmap 更新（新计数 48/45/31、AUTO_BIN 必填、002 状态）；本计划状态 execution_done 5/7。
-- [ ] T-05（owner_stage=review；依赖T-04；AC-04）：同clone独立上下文最终复审。
+- [x] T-05（owner_stage=review；依赖T-04；AC-04）：同clone独立上下文最终复审。
+  [✅ 已完成 2026-11-02] 独立子代理三轮：round1 needs_fix（R-1 门竞态 40/8 红实锤+红跑未披露+R-2/R-3）→ 修复 15abfa2 → round2 R-1 残留两窄竞态+R-4 → 修复 b4f727c → round3 **OUTCOME: pass**（R-1..R-4 全关闭机制+实证确认；vm 50/0×5 跨两独立上下文连续绿含复审×2、vue 45/0×2、desktop_mcp 31/0；AC-01..04 全 pass；笔记 plan-artifacts/paint-002/review/rereview-round2-notes.md）。
 - [ ] T-06（owner_stage=merge；依赖T-05 pass；AC-05）：仅app规范/归档/提交push收尾。
 
 ## 9. 复审记录
@@ -119,6 +120,7 @@ P用例owner_stage=work，T-02在既有入口建立所缺用例；不把重新�
   - 统一回归门：本仓无独立统一回归（verify_basic 两档 + desktop_mcp 即全部门）；已全部在冻结码上通过。
 - stage: review | review_scope: final | reviewer_identity: 独立子代理（同clone独立上下文，agent_cb81f411，未参与实现） | plan_id: PAINT-002 | plan_revision: 1 | outcome: needs_fix | worktree_path: D:/autostack/auto-paint | branch: main | reviewed_commit: 17e3334 | base_commit: c130165 | dependency_revisions: auto plan-890-verified-r7-t19-14-g47d8f7b / auto-ui-tool 0.1.0 dcde8058 | spec_inputs: basic-capabilities.md@17e3334、standalone-runtime.md@17e3334 | acceptance_results: AC-01 pass；AC-02/03 partial（R-1 门不稳定）；AC-04 pass（本复审完成） | pending_closeout_gates: 修复后连续绿轮次 + merge收尾 | findings: R-1(major) 验收门冻结码非确定——复审者vm首跑40/8红（杂散红格(12,7)/(12,10)，vnode重渲染竞态误址），work侧vue首跑43/2红（恢复段期望bug，已当轮修正但未在收据披露）；R-2(minor) SD-02"vue不带--server vm"无本轮实证（001记录未复验）；R-3(minor) SD-02"未保存内存编辑不跨进程"vm侧为推断无直接反例 | evidence: D:/autostack/plan-artifacts/paint-002/review/（review-notes.md+5门日志）；红证 verify-vm-1793625067.json(40/8)、verify-vue-1793624446.json(43/2)；绿证 verify-vm-1793625292.json(48/0)、vue 45/0、desktop 31/0 | next: work（修R-1 harness竞态+披露红跑+R-2/R-3补证，连续绿后同agent复审）
 - stage: work | plan_id: PAINT-002 | plan_revision: 1 | round: 2（repair R-1/R-2/R-3） | from: executing | to: executing（待复审确认） | outcome: pass（修复完成） | worktree: D:/autostack/auto-paint | branch: main | base_commit: c130165 | code_commit: 见 git log（repair 提交） | dependency_revisions: 不变 | task_ids: T-01,T-02,T-03,T-04（reopen→fix） | evidence: R-1 修复——VmSession.settled_snap 快照静默判定（连续两次结构一致才定址，杜绝重渲染期 vnode 误址）；click 未命中/类型错自动重址一次；paint(…, expect) 逐次验证落格、杂散即 Undo 回滚重试（≤3）；vue P-03 恢复段 Load 首次不符自动重载重试。R-3 修复——P-02 新增 vm 未保存编辑反例两检查（live 可见→强杀重开后不在，vm 计数 48→50）。R-2 修复——standalone-runtime.md 两处措辞收敛（001 记录标注未复验、反例指针）。红跑披露（review 要求）：work 期 vue 首跑 43/2 红系恢复段期望 bug（当轮复跑复绿，期望守卫在修复提交落地；verify-vue-1793624446.json）；复审者 vm 首跑 40/8 红系 harness vnode 竞态（verify-vm-1793625067.json，本修复目标）；两者均非 app 业务缺陷。修复后门矩阵：vm 50/0×2、vue 45/0×2、desktop_mcp 31/0、坏tool负控 exit 1（verify-vm-1793625743/1793625913.json、verify-vue-1793625978/1793626128.json，日志 plan-artifacts/paint-002/review/post-fix-*） | blockers: 无 | next_responsible_role: review（复审确认 R-1..R-3 关闭）
+- stage: review | review_scope: final | reviewer_identity: 独立子代理 agent_cb81f411（同clone独立上下文，未参与实现；round3 复审） | plan_id: PAINT-002 | plan_revision: 1 | outcome: pass | worktree_path: D:/autostack/auto-paint | branch: main | reviewed_commit: fca907b（业务码=17e3334 未动，修复仅 harness+收据） | base_commit: c130165 | dependency_revisions: auto plan-890-verified-r7-t19-14-g47d8f7b / auto-ui-tool 0.1.0 dcde8058 | spec_inputs: basic-capabilities.md@fca907b、standalone-runtime.md@fca907b | acceptance_results: AC-01 pass、AC-02 pass（vm×5 连续绿跨两上下文含复审×2）、AC-03 pass、AC-04 pass | pending_closeout_gates: T-06 merge（spec落地核验/归档/push/收尾） | findings: 无开放（R-1..R-4 全关闭；非阻塞观察：rr2 vm1 exit1 判工具链环境噪声未复现、set_path 理论窗口受响亮失败守卫） | evidence: rereview-round2-notes.md + rr2-gate-* 日志（plan-artifacts/paint-002/review/） | next: merge
 - stage: work | plan_id: PAINT-002 | plan_revision: 1 | round: 3（repair 续：复审round1后R-1残留+R-4） | from: executing | to: executing（待复审确认） | outcome: pass（修复完成） | worktree: D:/autostack/auto-paint | branch: main | base_commit: c130165 | code_commit: 15abfa2→b4f727c | dependency_revisions: 不变 | task_ids: T-01,T-02（harness only，app.at 未动——复审确认修复范围正确） | evidence: 复审round1确认 R-2/R-3/披露关闭、stray-paint 腐蚀模式消灭，残留两个更窄竞态：Mode A（Load 后 px 读取抢跑 RebuildCells）、Mode B（Export press 丢失于 set_path→渲染窗口）+R-4（收据"当轮已修"措辞过强）。修复：Load/Save 终态等待（wait_status/_press_to_status，终端状态是 handler 最后一句→px/文件已完成）；export_verify 效果判定（文件字节/失败状态，规避状态栏 stale 终值假匹配——首轮 press_to 即因此 43/2 红）；R-4 措辞改为"当轮复跑复绿"。红跑披露：rr2 首批 vm1 app 中途 exit 1（工具链已知间歇不稳，T-00 决策稿有记，当批 vm2/vue 复跑即绿，未复现）、vue 43/2（press_to stale 缺陷，本轮 export_verify 根除）。修复后门矩阵：vm 50/0×3 连续（verify-vm-1793627629/1793627783/1793627977.json）、vue 45/0（verify-vue-1793627829.json）、desktop_mcp 31/0（rr2b-* 日志） | blockers: 无 | next_responsible_role: review（round 2 复审：≥3 连续绿独立复跑）
 
 ## 10. 待澄清事项
