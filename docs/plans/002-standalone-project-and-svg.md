@@ -6,7 +6,7 @@ author: [Codex]
 created_at: 2026-11-01
 updated_at: 2026-11-01
 plan_revision: 1
-current_step: 0
+current_step: 1
 total_steps: 7
 base_branch: main
 base_commit: c1301656e5575f799875c51f31125e6557cb54d2
@@ -96,7 +96,8 @@ P用例owner_stage=work，T-02在既有入口建立所缺用例；不把重新�
 
 ## 8. 执行步骤
 
-- [ ] T-00（owner_stage=work；依赖001；AC-01..03）：核实正式profile/持久存储/后端/覆盖失败语义，输出有界决策稿。
+- [x] T-00（owner_stage=work；依赖001；AC-01..03）：核实正式profile/持久存储/后端/覆盖失败语义，输出有界决策稿。
+  [✅ 已完成 2026-11-02] 决策稿 docs/plans/evidence/002/standalone-decision.md；§4 五SHA零漂移；探针 D:/autostack/plan-artifacts/paint-002/t00/（plan-002 目录被 DATABASE-002 占用，改用 paint-002）。VM：强杀重开→Load逐格一致→再编辑、中文/空格路径字节级oracle、既有目标整体覆盖、失败可见+恢复 全绿。vue：persistent profile 强杀浏览器重开一致、后端断开导出假成功（stale exported，生成器裸 await 抛出）为唯一实证业务缺口 → app.at try/catch 最小修复转 T-02。
 - [ ] T-01（owner_stage=work；依赖T-00；AC-01）：在既有门固定自有资源、准备/首启和错误判定，不强制Rust或清共享缓存。
 - [ ] T-02（owner_stage=work；依赖T-01；AC-02/03）：补P-01..04的真实重开/导出与反例，回放旧矩阵；只修实证缺口。
 - [ ] T-03（owner_stage=work；依赖T-02；AC-03）：证明失败后再次编辑/导出及负控非零，准备SD候选。
