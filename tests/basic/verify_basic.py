@@ -253,17 +253,41 @@ class VmSession:
         m = re.search(r'status: "([^"]*)"', self.state("status"))
         return m.group(1) if m else ""
 
+    def settled_snap(self, tries=10, gap=0.4):
+        """Snapshot quiescence (review R-01): the autoui vnode tree re-renders
+        after status/model changes; vnode ids are only stable between renders.
+        Return a snapshot whose structure is identical to the previous one
+        (bounded wait), so element ids addressed from it are current."""
+        prev = self.snapshot()
+        for _ in range(tries):
+            time.sleep(gap)
+            cur = self.snapshot()
+            if cur == prev and len(cur) > 1000:
+                return cur
+            prev = cur
+        return prev
+
     def click(self, frag):
-        snap = self.snapshot()
+        snap = self.settled_snap()
         btns = {label: vid for vid, label in
                 re.findall(r'button #(vnode_\d+) "([^"]+)"', snap)}
         vid = next((v for k, v in btns.items() if frag in k), None)
         if vid is None:
             return "button not found: " + frag
-        return self.call("autoui_action", element_id=vid, action="press")
+        r = self.call("autoui_action", element_id=vid, action="press")
+        if "not valid" in r or "not found" in r:
+            # addressing raced a re-render: re-address once from a fresh settle
+            snap = self.settled_snap()
+            btns = {label: vid for vid, label in
+                    re.findall(r'button #(vnode_\d+) "([^"]+)"', snap)}
+            vid = next((v for k, v in btns.items() if frag in k), None)
+            if vid is None:
+                return "button not found: " + frag
+            r = self.call("autoui_action", element_id=vid, action="press")
+        return r
 
     def containers(self, snap=None):
-        snap = snap or self.snapshot()
+        snap = snap or self.settled_snap()
         children = defaultdict(list)
         stack = []
         lines = [(len(l) - len(l.lstrip()), l.strip())
@@ -294,7 +318,7 @@ class VmSession:
         return None
 
     def input_id(self):
-        m = re.search(r'input #(vnode_\d+)', self.snapshot())
+        m = re.search(r'input #(vnode_\d+)', self.settled_snap())
         return m.group(1) if m else None
 
     def set_path(self, path):
@@ -313,12 +337,34 @@ class VmSession:
                         return True
         return False
 
-    def paint(self, index, swatch_pos):
+    def paint(self, index, swatch_pos, expect=None):
+        """Paint one cell via real UI presses and VERIFY the effect landed on
+        the intended cell (review R-01: a press racing a re-render could
+        address a stale vnode and paint a stray cell). On a detected stray
+        (px changed elsewhere) undo the misfire and retry with fresh
+        addressing; bounded to 3 attempts."""
         self.click("Pencil")
         sw = self.swatches()
         self.call("autoui_action", element_id=sw[swatch_pos], action="press")
-        cells = self.cells()
-        self.call("autoui_action", element_id=cells[index], action="press")
+        for _ in range(3):
+            pre = self.px()
+            ok_pre = len(pre) == 256
+            cells = self.cells()
+            self.call("autoui_action", element_id=cells[index], action="press")
+            time.sleep(0.4)
+            if expect is None:
+                return True
+            px = self.px()
+            if ok_pre and len(px) == 256:
+                want = list(pre)
+                want[index] = expect
+                if px == want:
+                    return True
+                if px != pre:
+                    self.click("Undo")   # roll back the stray paint
+                    time.sleep(0.4)
+            # px == pre: press was a no-op (stale id), retry with fresh ids
+        return False
 
     def close(self):
         """Strong-kill our own spawned process tree (P-02 kill semantics)."""
@@ -366,7 +412,7 @@ def run_vm_profile(report, evidence_dir):
               f"len={len(px)} first={px[:3]}")
 
         # single point: red at (0,0), undo, redo
-        s.paint(0, 1)
+        s.paint(0, 1, expect=RED)
         px = s.px()
         check("single point: 1 red at 0",
               len(px) == 256 and px[0] == RED and sum(1 for c in px if c == RED) == 1,
@@ -385,7 +431,7 @@ def run_vm_profile(report, evidence_dir):
         # uniform black (#111827): clean canvas, one dark cell + flood
         s.click("New")
         time.sleep(0.5)
-        s.paint(3, 0)
+        s.paint(3, 0, expect=DARK)
         s.click("Fill")
         cells = s.cells()
         s.call("autoui_action", element_id=cells[4], action="press")
@@ -425,7 +471,7 @@ def run_vm_profile(report, evidence_dir):
         time.sleep(0.5)
         report.fixtures["sparse_points"] = sha256(json.dumps(pts))
         for c, r in pts:
-            s.paint(r * 16 + c, 1)
+            s.paint(r * 16 + c, 1, expect=RED)
         px = s.px()
         check("sparse pattern painted per-cell exact",
               px == want, f"red={px.count(RED) if px else 0}")
@@ -493,7 +539,7 @@ def run_vm_profile(report, evidence_dir):
         checkp2 = lambda name, cond, detail="": report.check("P-02", name, cond, detail)
         want_a = list(want)
         want_a[55] = DARK
-        s.paint(55, 0)
+        s.paint(55, 0, expect=DARK)
         time.sleep(0.3)
         checkp2("next edit after V-02 flow painted", s.px() == want_a, "px mismatch")
         s.click("Save")
@@ -512,7 +558,7 @@ def run_vm_profile(report, evidence_dir):
         time.sleep(0.8)
         checkp2("reopen same storage -> Load 256-cell identical", s.px() == want_a,
                 f"red={s.px().count(RED)}")
-        s.paint(100, 0)
+        s.paint(100, 0, expect=DARK)
         time.sleep(0.3)
         want_b = list(want_a)
         want_b[100] = DARK
@@ -527,6 +573,23 @@ def run_vm_profile(report, evidence_dir):
         time.sleep(0.8)
         checkp2("second reopen -> Load still identical", s.px() == want_b,
                 f"red={s.px().count(RED)} dark={s.px().count(DARK)}")
+        # review R-03 counterexample: an unsaved in-memory edit must NOT
+        # survive a strong-kill reopen (vm side; vue side is evidenced by the
+        # P-03 recovery Load restoring the last save).
+        s.paint(200, 0, expect=DARK)
+        time.sleep(0.3)
+        want_u = list(want_b)
+        want_u[200] = DARK
+        checkp2("unsaved edit visible in live session", s.px() == want_u,
+                "px mismatch")
+        s.close()
+        s = VmSession(storage, report)
+        if not s.ready:
+            return 1
+        s.click("Load")
+        time.sleep(0.8)
+        checkp2("unsaved edit does not survive reopen", s.px() == want_b,
+                f"dark={s.px().count(DARK)}")
 
         # ── P-03 [vm]: export paths, overwrite, failure recovery ──
         print("\nP-03 [vm]: Chinese/space path, overwrite, failure+recovery")
@@ -543,7 +606,7 @@ def run_vm_profile(report, evidence_dir):
         checkp3("Chinese/space path file byte-equals oracle", content_b == oracle_b,
                 f"len={len(content_b)}/{len(oracle_b)}")
         # overwrite existing target: export different content to the SAME path
-        s.paint(150, 0)
+        s.paint(150, 0, expect=DARK)
         time.sleep(0.3)
         want_c = list(want_b)
         want_c[150] = DARK
@@ -1071,6 +1134,12 @@ def run_vue_profile(report, evidence_dir):
         s.page.wait_for_selector(".w-5.h-5", timeout=30000)
         s.button("Load").click()
         s.page.wait_for_timeout(600)
+        if s.px() != want_a:
+            # first post-restart load raced server/page warmup: reload once
+            s.page.reload(wait_until="networkidle")
+            s.page.wait_for_selector(".w-5.h-5", timeout=30000)
+            s.button("Load").click()
+            s.page.wait_for_timeout(600)
         checkp3("recovery: Load identical after app restart", s.px() == want_a,
                 f"red={s.px().count(RED)} dark={s.px().count(DARK)}")
         rec_path = os.path.join(tempfile.gettempdir(),

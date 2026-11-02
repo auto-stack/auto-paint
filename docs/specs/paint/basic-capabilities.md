@@ -71,7 +71,7 @@
 ## 5. 验收入口
 
 ```sh
-python tests/basic/verify_basic.py --profile vm    # 48 项（001 V-01..03 + 002 P-01..04）
+python tests/basic/verify_basic.py --profile vm    # 50 项（001 V-01..03 + 002 P-01..04）
 python tests/basic/verify_basic.py --profile vue   # 45 项（需 17834/17835 空闲；持久 profile）
 AUTO_BIN=<auto CLI> python tests/desktop_mcp.py    # VM 轨回归 31 项
 ```

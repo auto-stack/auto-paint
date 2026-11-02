@@ -13,8 +13,10 @@
 | vm | `auto run -r vm` | iced/VM 桌面（`AUTOUI_MCP_PORT` 暴露 autoui 工具面） |
 | vue | `auto run -r vue --server vm` | vite front 17834 + VM HTTP 后端 17835 |
 
-默认 `auto run`（rust 后端生成）不可用——本 app 无 rust 后端；vue 档必须
-带 `--server vm`，否则导出无后端承载（保存/加载仍可用）。
+默认 `auto run`（rust 后端生成）不可用——本 app 无 rust 后端（001
+capability-decision 实测记录，002 未复验此负路径）；vue 档必须带
+`--server vm`，否则导出无后端承载（保存/加载仍可用）。002 的 vue 门
+只覆盖 `--server vm` 形态及其后端断开路径。
 
 ## 2. 存储身份（两 profile 不互享）
 
@@ -25,8 +27,9 @@
 | 跨进程重开 | 同一存储文件重启 → 显式 Load 恢复 256 格逐项一致 | 强杀浏览器树后以同一 profile 重启 → Load 逐项一致 |
 
 - Init **不自动加载**：新会话白板初态是合同行为，恢复经显式 Load。
-- 未保存的内存编辑不跨进程存活（两档一致）；`Load` 恢复的是最后一次
-  Save 的快照。
+- 未保存的内存编辑不跨进程存活（两档一致；vm 反例见 P-02"unsaved edit
+  does not survive reopen"，vue 反例见 P-03 恢复段）；`Load` 恢复的是
+  最后一次 Save 的快照。
 - 两 profile 存储不自动共享、不迁移：vm 文件 KV 与 vue localStorage 是
   两个已声明 profile，跨 profile 不共享**不是数据丢失**，不声称全端同步。
 
@@ -55,7 +58,7 @@
 ## 5. 验收入口（永久回归）
 
 ```sh
-python tests/basic/verify_basic.py --profile vm    # 48 项
+python tests/basic/verify_basic.py --profile vm    # 50 项
 python tests/basic/verify_basic.py --profile vue   # 45 项
 AUTO_BIN=<auto CLI> python tests/desktop_mcp.py    # 31 项
 ```

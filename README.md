@@ -2,7 +2,7 @@
 
 画板，使用 AutoLang / AutoUI 开发的独立应用。
 
-更新：2026-11-02。002 work段完成（待复审）：独立运行门VM48/48、Vue45/45、desktop_mcp31/31全绿（坏tool负控非零）；修复vue后端断开导出假成功。001的VM27/27、Vue22/22为001冻结记录。
+更新：2026-11-02。002 work段完成（待复审）：独立运行门VM50/50×2、Vue45/45×2、desktop_mcp31/31连续绿（坏tool负控非零）；修复vue后端断开导出假成功。001的VM27/27、Vue22/22为001冻结记录。
 
 ## 运行
 
@@ -24,7 +24,7 @@ auto run -r vue --server vm # 浏览器（vue）档：front 17834 + 后端 17835
 ## 验收
 
 ```sh
-python tests/basic/verify_basic.py --profile vm    # 48 项（001 V组 + 002 P组）
+python tests/basic/verify_basic.py --profile vm    # 50 项（001 V组 + 002 P组）
 python tests/basic/verify_basic.py --profile vue   # 45 项（17834/17835 需空闲；运行自有持久浏览器 profile）
 AUTO_BIN=<auto CLI> python tests/desktop_mcp.py    # VM 轨回归 31 项（必须显式指定 AUTO_BIN）
 ```
