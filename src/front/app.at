@@ -23,6 +23,11 @@
 use stylekit.styles: caption_text
 use back.api: export_svg
 
+// PLAN-056 T-02：官方主题包主题名导入（031 合同消费面——`dep themes` 声明
+// 使包可解析，本 use 把包内 pub 主题收进收集链；无此行 themes 树不注册，
+// design.theme/follow 宿主候选都会在 C-11 未注册拒绝）。
+use themes.themes: Auto
+
 style tool_btn = "px-3 py-1.5 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80"
 style wrap_row = "items-center gap-2 flex-wrap"
 
@@ -30,6 +35,18 @@ widget App {
     msg {
         Init, SetTool(str), SetCur(str), Paint(int), Fill(int), SetPx(int, str),
         PushUndo, Undo, Redo, ApplySnap(str), Clear, New, Save, Load, SetPath(str), Export
+    }
+
+    // PLAN-056 T-02：主题设计默认（独立默认腿）。theme="Auto" 经 pac
+    // `dep themes`（vendor/themes 固定快照）注册的官方树解析。本产品无
+    // dark_mode 状态位，原 pac theme:"dark" 默认由静态 mode:"dark" 承接
+    // （独立运行 chrome 默认暗色不变）；桌面内宿主策略完整快照
+    // （family+mode）按 031 full-host 语义整体接管（follow）。画布 256 像素
+    // 为受验证 hex 真值内容域（PAINT-001 词汇表），不随主题映射染色；
+    // 工具/调色板 chrome 为语义 token 类，族内明暗由 token 切换承接。
+    design {
+        theme: "Auto"
+        mode: "dark"
     }
 
     model {

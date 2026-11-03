@@ -6,7 +6,10 @@ icon: "pencil"
 title: "Paint"
 title_zh: "像素画板"
 category: "tool"
-theme: "dark"
+# PLAN-056 T-02（auto-os/PLAN-056 主合同反链见 README）：theme 显式键移除
+# ——跟随主题链（宿主策略完整快照 > 本 design 默认 > legacy 回退）。原 dark
+# 默认改由 app.at design 腿静态承接（独立运行默认暗色 chrome 不变；画布
+# 像素为 hex 真值内容域，不随主题染色）。
 accent: "indigo"
 # Plan 504: 窗口随内容自然尺寸收缩（画布定长 16×16 + 工具/调色板栏）。
 window: "fit"
@@ -15,6 +18,15 @@ desktop: "true"
 
 dep stylekit {
     path: "vendor/stylekit"
+}
+
+# PLAN-056 T-02：官方主题包正式接入——`vendor/themes` 为 UI 管理渠道发布的
+# **固定版本快照**（themes 0.2.0，内容 digest
+# 9fa07742dc68aa5377ae06cb2d966386002063f184c515b6c5dddf8a6bef838e，
+# 与源包逐文件 sha256 校验等价；不可二次编辑、非第二权威源）。theme 键保持
+# 缺省 = follow 语义。品牌 accent（indigo）与 category（tool）原样。
+dep themes {
+    path: "vendor/themes"
 }
 front_port: 17834
 # PAINT-001：SVG 导出后端（src/back/api.at 的 VM HTTP 服务）端口；

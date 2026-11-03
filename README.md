@@ -56,3 +56,18 @@ T-00决策稿见 [docs/plans/evidence/002/standalone-decision.md](docs/plans/evi
 [路线图](docs/roadmap-v0.6.md) · [现实现规范](docs/specs/paint/basic-capabilities.md) · [独立运行规范](docs/specs/paint/standalone-runtime.md)。开发与顺序复审在D:/autostack/auto-paint独立clone main，一app一写入者（复审期间暂停实现写入）；不在OS组合子模块开发，不建junction/symlink。归档/merge只完成本app的Spec/计划/提交push与自有临时产物收尾，不更新AutoOS gitlink、manifest或.gitmodules。
 
 保留16×16与SVG范围。VM文件KV、Vue同源localStorage不自动共享（两个已声明profile，不互享不是数据丢失）。PNG、图层/大画布和跨端同步另排。
+
+## 主题（auto-os/PLAN-056 接入）
+
+本产品已接入 AutoUI **官方主题包**正式消费面（2026-11-03，PLAN-056 T-03）：
+
+- `vendor/themes` 为 UI 管理渠道发布的固定版本快照（`themes` 0.2.0，内容
+  digest `9fa07742dc68aa5377ae06cb2d966386002063f184c515b6c5dddf8a6bef838e`），
+  经 `pac.at` `dep themes` 消费；快照不可二次编辑、非第二权威源。
+- 主合同在 **auto-os/PLAN-056**：pac `theme` 显式键移除（原 `dark`）=
+  **follow 宿主**；`src/front/app.at` `design { theme: "Auto", mode: "dark" }`
+  为独立默认腿（本产品无 dark_mode 位，静态 dark 承接原默认 chrome 语义）；
+  `use themes.themes: Auto` 注册收集链（C-11 合同）。
+- **内容域豁免**：画布 256 像素为受验证 hex 真值（PAINT-001 词汇表），SVG
+  导出与工程格式身份不随主题映射染色；16×16/SVG/两 profile 各自 storage
+  原样。
